@@ -9,10 +9,10 @@ data class VehicleStatus(
     val engineStatus: String,
     val speed : Double,
     val timestamp: LocalDateTime = LocalDateTime.now(),
-    val location: Location? = null
+    val location: VehicleLocation? = null
 )
 
-data class Location(
+data class VehicleLocation(
     val latitude: Double,
     val longitude: Double
 )

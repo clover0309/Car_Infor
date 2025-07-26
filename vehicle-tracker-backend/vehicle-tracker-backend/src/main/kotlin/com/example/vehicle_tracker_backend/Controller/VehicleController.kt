@@ -30,6 +30,27 @@ class VehicleController {
         return mapOf("message" to "Status updated successfully")
     }
     
+    @GetMapping("/status")
+    fun getStatusEndpointInfo(): Map<String, String> {
+        return mapOf(
+            "message" to "This endpoint accepts POST requests only",
+            "method" to "POST",
+            "contentType" to "application/json",
+            "example" to """
+                {
+                  "deviceId": "test-device-001",
+                  "bluetoothDevice": "Car Audio XYZ", 
+                  "engineStatus": "ON",
+                  "speed": 45.5,
+                  "location": {
+                    "latitude": 37.5665,
+                    "longitude": 126.9780
+                  }
+                }
+            """.trimIndent()
+        )
+    }
+    
     @GetMapping("/current")
     fun getCurrentStatus(): Map<String, Any?> {
         val latestStatus = statusHistory.lastOrNull()

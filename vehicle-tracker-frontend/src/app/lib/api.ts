@@ -52,32 +52,45 @@ const data = await response.json();
     }
 },
 
-// 차량 상태 업데이트 (테스트용)
-    updateStatus: async (status: Omit<VehicleStatus, 'timestamp'>): Promise<boolean> => {
+  // 차량 상태 업데이트 (테스트용)
+  updateStatus: async (status: Omit<VehicleStatus, 'timestamp'>): Promise<boolean> => {
     try {
-        const response = await fetch(`${API_BASE_URL}/status`, {
+      console.log('전송할 데이터:', JSON.stringify(status, null, 2)); // 디버깅용 로그
+      
+      const response = await fetch(`${API_BASE_URL}/status`, {
         method: 'POST',
         headers: {
-        'Content-Type': 'application/json',
-},
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify(status),
-});
-
-return response.ok;
-} catch (error) {
-        console.error('Error updating status:', error);
-    return false;
-}
-},
-
-// 백엔드 연결 테스트
-testConnection: async (): Promise<boolean> => {
-    try {
-        const response = await fetch(`${API_BASE_URL}/test`);
-    return response.ok;
-    } catch (error) {
-        console.error('Error testing connection:', error);
+      });
+      
+      console.log('응답 상태:', response.status); // 디버깅용 로그
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('서버 응답 에러:', errorText);
         return false;
-        }
+      }
+      
+      const result = await response.json();
+      console.log('서버 응답:', result); // 디버깅용 로그
+      
+      return true;
+    } catch (error) {
+      console.error('Error updating status:', error);
+      return false;
     }
+  },
+
+  // 백엔드 연결 테스트
+  testConnection: async (): Promise<boolean> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/test`);
+      return response.ok;
+    } catch (error) {
+      console.error('Error testing connection:', error);
+      return false;
+    }
+  }
 };
