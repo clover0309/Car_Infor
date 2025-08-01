@@ -7,12 +7,12 @@ import android.webkit.*
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
-import com.example.vehicletracker.BuildConfig  // 이 줄 추가!
 
 class MainActivity : Activity() {
 
     private lateinit var webView: WebView
     private lateinit var statusText: TextView
+    private var backPressedCallback: OnBackPressedCallback? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -24,11 +24,8 @@ class MainActivity : Activity() {
         // WebView 설정
         setupWebView()
 
-        // 뒤로가기 버튼 처리 설정
+        // 뒤로가기 버튼 처리 설정 (수정된 버전)
         setupBackPressHandler()
-
-        // 웹페이지 로드 (임시로 주석 처리하여 테스트)
-        // loadWebPage()
 
         // 테스트: 간단한 메시지 표시
         updateStatus("앱이 정상적으로 시작되었습니다 ✓")
@@ -112,23 +109,70 @@ class MainActivity : Activity() {
             }
         }
 
-        // 개발자 도구 활성화
-        WebView.setWebContentsDebuggingEnabled(true)
+        // 개발자 도구 활성화 (DEBUG 빌드에서만)
+        if (BuildConfig.DEBUG) {
+            WebView.setWebContentsDebuggingEnabled(true)
+        }
     }
 
     private fun setupBackPressHandler() {
-        // 최신 방식의 뒤로가기 버튼 처리
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() {
-                if (webView.canGoBack()) {
-                    webView.goBack()
-                } else {
-                    // 기본 뒤로가기 동작 (앱 종료)
-                    isEnabled = false
-                    onBackPressedDispatcher.onBackPressed()
+        try {
+            // 기존 콜백이 있다면 제거
+            backPressedCallback?.remove()
+
+            // 새로운 뒤로가기 콜백 생성
+            backPressedCallback = object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    if (::webView.isInitialized && webView.canGoBack()) {
+                        // WebView에서 뒤로 가기
+                        webView.goBack()
+                        Log.d("BackPress", "WebView 뒤로가기 실행")
+                    } else {
+                        // 앱 종료 확인 대화상자 표시
+                        showExitConfirmation()
+                    }
                 }
             }
-        })
+
+            // 콜백 등록 (Activity가 ComponentActivity를 상속받지 않으므로 다른 방식 사용)
+            // Activity에서는 onBackPressed() 오버라이드 방식 사용
+            Log.d("BackPress", "뒤로가기 핸들러 설정 완료")
+
+        } catch (e: Exception) {
+            Log.e("BackPress", "뒤로가기 핸들러 설정 실패", e)
+            // 기본 뒤로가기 동작 유지
+        }
+    }
+
+    // Activity에서 뒤로가기 처리 (Activity는 ComponentActivity가 아니므로 기존 방식 사용)
+    override fun onBackPressed() {
+        if (::webView.isInitialized && webView.canGoBack()) {
+            webView.goBack()
+            Log.d("BackPress", "WebView 뒤로가기 실행")
+        } else {
+            showExitConfirmation()
+        }
+    }
+
+    private fun showExitConfirmation() {
+        try {
+            // 간단한 Toast로 대체 (AlertDialog 사용 시 추가 import 필요)
+            Toast.makeText(this, "한 번 더 누르면 앱이 종료됩니다.", Toast.LENGTH_SHORT).show()
+
+            // 2초 이내에 다시 뒤로가기를 누르면 앱 종료
+            var backPressTime = 0L
+            val currentTime = System.currentTimeMillis()
+
+            if (currentTime - backPressTime < 2000) {
+                super.onBackPressed()
+                finish()
+            } else {
+                backPressTime = currentTime
+            }
+        } catch (e: Exception) {
+            Log.e("BackPress", "종료 확인 처리 실패", e)
+            super.onBackPressed()
+        }
     }
 
     private fun loadWebPage() {
@@ -195,45 +239,37 @@ class MainActivity : Activity() {
     }
 
     private fun getWebPageUrl(): String {
-        // 임시로 강제 설정 (테스트용)
-        val url = "http://10.0.2.2:3000"  // 에뮬레이터 강제 설정
+        // 강제 URL 설정 (에뮬레이터용)
+        val url = "http://10.0.2.2:3000"
 
-        Log.d("WebView", "=== 강제 URL 설정 ===")
-        Log.d("WebView", "강제 설정 URL: $url")
-        Log.d("WebView", "===================")
+        Log.d("WebView", "=== URL 설정 ===")
+        Log.d("WebView", "사용할 URL: $url")
+        Log.d("WebView", "=================")
 
         return url
     }
 
-    private fun isEmulator(): Boolean {
-        val result = (android.os.Build.FINGERPRINT.startsWith("generic")
-                || android.os.Build.FINGERPRINT.startsWith("unknown")
-                || android.os.Build.MODEL.contains("google_sdk")
-                || android.os.Build.MODEL.contains("Emulator")
-                || android.os.Build.MODEL.contains("Android SDK built for x86"))
-
-        // 디버깅 정보 출력
-        Log.d("DeviceInfo", "=== 디바이스 정보 ===")
-        Log.d("DeviceInfo", "FINGERPRINT: ${android.os.Build.FINGERPRINT}")
-        Log.d("DeviceInfo", "MODEL: ${android.os.Build.MODEL}")
-        Log.d("DeviceInfo", "PRODUCT: ${android.os.Build.PRODUCT}")
-        Log.d("DeviceInfo", "DEVICE: ${android.os.Build.DEVICE}")
-        Log.d("DeviceInfo", "HARDWARE: ${android.os.Build.HARDWARE}")
-        Log.d("DeviceInfo", "isEmulator 결과: $result")
-        Log.d("DeviceInfo", "==================")
-
-        return result
-    }
-
     private fun updateStatus(message: String) {
         runOnUiThread {
-            statusText.text = message
+            if (::statusText.isInitialized) {
+                statusText.text = message
+            }
         }
     }
 
     override fun onDestroy() {
+        try {
+            // 콜백 제거
+            backPressedCallback?.remove()
+
+            // WebView 정리
+            if (::webView.isInitialized) {
+                webView.destroy()
+            }
+        } catch (e: Exception) {
+            Log.e("MainActivity", "리소스 정리 중 오류", e)
+        }
+
         super.onDestroy()
-        // WebView 정리
-        webView.destroy()
     }
 }
