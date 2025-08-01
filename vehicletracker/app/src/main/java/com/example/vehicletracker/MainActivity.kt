@@ -6,13 +6,13 @@ import android.util.Log
 import android.webkit.*
 import android.widget.TextView
 import android.widget.Toast
-import androidx.activity.OnBackPressedCallback
+import android.view.KeyEvent
 
 class MainActivity : Activity() {
 
     private lateinit var webView: WebView
     private lateinit var statusText: TextView
-    private var backPressedCallback: OnBackPressedCallback? = null
+    private var backPressTime: Long = 0  // 클래스 멤버 변수로 이동
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -23,9 +23,6 @@ class MainActivity : Activity() {
 
         // WebView 설정
         setupWebView()
-
-        // 뒤로가기 버튼 처리 설정 (수정된 버전)
-        setupBackPressHandler()
 
         // 테스트: 간단한 메시지 표시
         updateStatus("앱이 정상적으로 시작되었습니다 ✓")
@@ -109,70 +106,33 @@ class MainActivity : Activity() {
             }
         }
 
-        // 개발자 도구 활성화 (DEBUG 빌드에서만)
-        if (BuildConfig.DEBUG) {
-            WebView.setWebContentsDebuggingEnabled(true)
-        }
+        // 개발자 도구 활성화 제거
     }
 
-    private fun setupBackPressHandler() {
-        try {
-            // 기존 콜백이 있다면 제거
-            backPressedCallback?.remove()
+    // 하드웨어 뒤로가기 버튼 처리
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_BACK && event?.action == KeyEvent.ACTION_DOWN) {
+            if (::webView.isInitialized && webView.canGoBack()) {
+                webView.goBack()
+                Log.d("BackPress", "WebView 뒤로가기 실행")
+                return true
+            } else {
+                // 앱 종료 확인
+                val currentTime = System.currentTimeMillis()
 
-            // 새로운 뒤로가기 콜백 생성
-            backPressedCallback = object : OnBackPressedCallback(true) {
-                override fun handleOnBackPressed() {
-                    if (::webView.isInitialized && webView.canGoBack()) {
-                        // WebView에서 뒤로 가기
-                        webView.goBack()
-                        Log.d("BackPress", "WebView 뒤로가기 실행")
-                    } else {
-                        // 앱 종료 확인 대화상자 표시
-                        showExitConfirmation()
-                    }
+                if (currentTime - backPressTime < 2000) {
+                    // 2초 이내에 다시 눌렀다면 앱 종료
+                    finish()
+                    return true
+                } else {
+                    // 첫 번째 뒤로가기 버튼 클릭
+                    backPressTime = currentTime
+                    Toast.makeText(this, "한 번 더 누르면 앱이 종료됩니다.", Toast.LENGTH_SHORT).show()
+                    return true
                 }
             }
-
-            // 콜백 등록 (Activity가 ComponentActivity를 상속받지 않으므로 다른 방식 사용)
-            // Activity에서는 onBackPressed() 오버라이드 방식 사용
-            Log.d("BackPress", "뒤로가기 핸들러 설정 완료")
-
-        } catch (e: Exception) {
-            Log.e("BackPress", "뒤로가기 핸들러 설정 실패", e)
-            // 기본 뒤로가기 동작 유지
         }
-    }
-
-    // Activity에서 뒤로가기 처리 (Activity는 ComponentActivity가 아니므로 기존 방식 사용)
-    override fun onBackPressed() {
-        if (::webView.isInitialized && webView.canGoBack()) {
-            webView.goBack()
-            Log.d("BackPress", "WebView 뒤로가기 실행")
-        } else {
-            showExitConfirmation()
-        }
-    }
-
-    private fun showExitConfirmation() {
-        try {
-            // 간단한 Toast로 대체 (AlertDialog 사용 시 추가 import 필요)
-            Toast.makeText(this, "한 번 더 누르면 앱이 종료됩니다.", Toast.LENGTH_SHORT).show()
-
-            // 2초 이내에 다시 뒤로가기를 누르면 앱 종료
-            var backPressTime = 0L
-            val currentTime = System.currentTimeMillis()
-
-            if (currentTime - backPressTime < 2000) {
-                super.onBackPressed()
-                finish()
-            } else {
-                backPressTime = currentTime
-            }
-        } catch (e: Exception) {
-            Log.e("BackPress", "종료 확인 처리 실패", e)
-            super.onBackPressed()
-        }
+        return super.onKeyDown(keyCode, event)
     }
 
     private fun loadWebPage() {
@@ -259,9 +219,6 @@ class MainActivity : Activity() {
 
     override fun onDestroy() {
         try {
-            // 콜백 제거
-            backPressedCallback?.remove()
-
             // WebView 정리
             if (::webView.isInitialized) {
                 webView.destroy()

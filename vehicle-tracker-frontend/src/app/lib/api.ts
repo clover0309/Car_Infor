@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:8080/api/vehicle';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://10.0.2.2:8080/api/vehicle';
 
 export interface VehicleStatus {
     deviceId: string;
