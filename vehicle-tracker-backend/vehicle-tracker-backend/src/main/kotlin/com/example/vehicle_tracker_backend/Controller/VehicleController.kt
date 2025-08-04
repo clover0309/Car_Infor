@@ -9,7 +9,8 @@ import java.util.concurrent.ConcurrentLinkedQueue
 @CrossOrigin(
     origins = ["http://localhost:3000",
                 "http://10.0.2.2:3000",
-                "http://0.0.0.0:3000"
+                "http://0.0.0.0:3000",
+                "http://192.168.1.219:3000"
     ],
     methods = [RequestMethod.GET, RequestMethod.POST, RequestMethod.OPTIONS],
     allowedHeaders = ["*"]
@@ -36,7 +37,7 @@ class VehicleController {
     @GetMapping("/status")
     fun getStatusEndpointInfo(): Map<String, String> {
         return mapOf(
-            "message" to "This endpoint accepts POST requests only",
+            "message" to "이 엔드포인트는 POST형식만 지원합니다.",
             "method" to "POST",
             "contentType" to "application/json",
             "example" to """

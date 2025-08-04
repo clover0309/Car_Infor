@@ -27,7 +27,7 @@ const GetAPIBaseURL = () => {
         console.log('🔍 Android 감지:', isAndroid);
         
         if (isAndroid) {
-            const url = 'http://10.0.2.2:8080/api/vehicle';
+            const url = 'http://192.168.1.219:8080/api/vehicle';
             console.log('✅ Android 환경 감지! 사용할 URL:', url);
             return url;
         } else {
@@ -37,7 +37,7 @@ const GetAPIBaseURL = () => {
         console.log('❌ window 객체 없음 (서버사이드 렌더링)');
     }
     
-    const defaultUrl = 'http://localhost:8080/api/vehicle';
+    const defaultUrl = 'http://192.168.1.219:8080/api/vehicle';
     console.log('🔧 기본값 사용 (로컬 환경):', defaultUrl);
     return defaultUrl;
 }

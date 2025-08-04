@@ -200,7 +200,7 @@ class MainActivity : Activity() {
 
     private fun getWebPageUrl(): String {
         // 강제 URL 설정 (에뮬레이터용)
-        val url = "http://10.0.2.2:3000"
+        val url = "http://192.168.1.219:3000"
 
         Log.d("WebView", "=== URL 설정 ===")
         Log.d("WebView", "사용할 URL: $url")

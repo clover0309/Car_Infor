@@ -12,7 +12,7 @@ class ApiService {
     companion object {
         private const val TAG = "ApiService"
         // 백엔드 서버 주소 (Spring Boot)
-        private const val BASE_URL = "http://10.0.2.2:8080/api/vehicle"
+        private const val BASE_URL = "http://192.168.1.219:8080/api/vehicle"
     }
 
     // 서버 연결 테스트
