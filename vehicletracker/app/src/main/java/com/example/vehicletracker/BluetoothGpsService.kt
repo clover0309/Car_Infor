@@ -8,6 +8,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
+import com.example.vehicletracker.receiver.BluetoothStateReceiver
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -18,6 +19,7 @@ import android.os.IBinder
 import android.os.Looper
 import androidx.core.app.NotificationCompat
 import com.google.android.gms.location.*
+import android.util.Log
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -25,21 +27,53 @@ class BluetoothGpsService : Service() {
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var locationCallback: LocationCallback
     private var currentDevice: BluetoothDevice? = null
+    private var currentDeviceName: String? = null
+    private var currentDeviceAddress: String? = null
     private var ignitionOn: Boolean = false
     private var lastSpeed: Float = 0f
     private var lastLocation: Location? = null
-    private val deviceId: String by lazy { android.provider.Settings.Secure.getString(contentResolver, android.provider.Settings.Secure.ANDROID_ID) }
+    private val deviceId: String by lazy { android.provider.Settings.Secure.getString(contentResolver, android.provider.Settings.Secure.ANDROID_ID) 
+    }
+    private lateinit var bluetoothReceiver: BluetoothStateReceiver
+
 
     override fun onCreate() {
         super.onCreate()
-        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
-        registerBluetoothReceiver()
-        startForegroundServiceNotification()
-        startLocationUpdates()
+        try {
+            Log.d("BlueToothGpsService", "onCreate called");
+            bluetoothReceiver = BluetoothStateReceiver()
+            val filter = IntentFilter().apply {
+                addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
+                addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
+                addAction(BluetoothAdapter.ACTION_STATE_CHANGED)
+            }
+            registerReceiver(bluetoothReceiver, filter)
+            // Initialize fusedLocationClient before using it
+            fusedLocationClient = com.google.android.gms.location.LocationServices.getFusedLocationProviderClient(this)
+            startForegroundServiceNotification()
+            startLocationUpdates()
+        } catch (e: Exception) {
+            Log.e("BlueToothGpsService", "onCreate crash", e)
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // Optionally handle intent from Bixby Routine or others
+        Log.i("BlueToothGpsService", "onStartCommand called, action: ${intent?.action}")
+        Log.i("BlueToothGpsService", "ACTION_VEHICLE_BLUETOOTH_CONNECTED 수신: ...")
+        // 커스텀 인텐트로 차량 블루투스 연결 이벤트 처리
+        if (intent != null && intent.action == "com.example.vehicletracker.ACTION_VEHICLE_BLUETOOTH_CONNECTED") {
+            val deviceName = intent.getStringExtra("bluetooth_device_name")
+            val deviceAddress = intent.getStringExtra("bluetooth_device_address")
+            Log.i("BlueToothGpsService", "ACTION_VEHICLE_BLUETOOTH_CONNECTED 수신: $deviceName ($deviceAddress)")
+            if (deviceName != null && deviceAddress != null) {
+                val device = BluetoothAdapter.getDefaultAdapter()?.bondedDevices?.find { it.address == deviceAddress }
+                currentDevice = device
+                currentDeviceName = deviceName
+                currentDeviceAddress = deviceAddress
+                ignitionOn = true
+                sendUpdateToBackend()
+            }
+        }
         return START_STICKY
     }
 
@@ -70,32 +104,6 @@ class BluetoothGpsService : Service() {
         startForeground(1, notification)
     }
 
-    private fun registerBluetoothReceiver() {
-        val filter = IntentFilter()
-        filter.addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
-        filter.addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
-        registerReceiver(bluetoothReceiver, filter)
-    }
-
-    private val bluetoothReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            val action = intent?.action
-            val device = intent?.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
-            when (action) {
-                BluetoothDevice.ACTION_ACL_CONNECTED -> {
-                    currentDevice = device
-                    ignitionOn = true
-                    sendUpdateToBackend()
-                }
-                BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
-                    ignitionOn = false
-                    sendUpdateToBackend()
-                    currentDevice = null
-                }
-            }
-        }
-    }
-
     private fun startLocationUpdates() {
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(locationResult: LocationResult) {
@@ -116,33 +124,34 @@ class BluetoothGpsService : Service() {
     }
 
     private fun sendUpdateToBackend() {
-    val engineStatus = if (ignitionOn) "ON" else "OFF"
-    val timestamp = java.time.Instant.now().toString()
-    val dto = com.example.vehicletracker.api.VehicleStatusDto(
-        deviceId = deviceId,
-        bluetoothDevice = currentDevice?.name,
-        engineStatus = engineStatus,
-        speed = lastSpeed,
-        timestamp = timestamp,
-        location = com.example.vehicletracker.api.VehicleLocation(
-            latitude = lastLocation?.latitude,
-            longitude = lastLocation?.longitude
+        val engineStatus = if (ignitionOn) "ON" else "OFF"
+        val timestamp = java.time.Instant.now().toString()
+        val btName = currentDevice?.name ?: currentDeviceName
+        val dto = com.example.vehicletracker.api.VehicleStatusDto(
+            deviceId = deviceId,
+            bluetoothDevice = btName,
+            engineStatus = engineStatus,
+            speed = lastSpeed,
+            timestamp = timestamp,
+            location = com.example.vehicletracker.api.VehicleLocation(
+                latitude = lastLocation?.latitude,
+                longitude = lastLocation?.longitude
+            )
         )
-    )
-    android.util.Log.d("VehicleTracker", "API Send: $dto")
-    Thread {
-        try {
-            val response = com.example.vehicletracker.api.RetrofitInstance.api.sendVehicleStatus(dto).execute()
-            if (response.isSuccessful) {
-                android.util.Log.i("VehicleTracker", "전송 성공: ${response.code()}")
-            } else {
-                android.util.Log.e("VehicleTracker", "전송 실패: ${response.code()} ${response.errorBody()?.string()}")
+        android.util.Log.d("VehicleTracker", "API Send: $dto")
+        Thread {
+            try {
+                val response = com.example.vehicletracker.api.RetrofitInstance.api.sendVehicleStatus(dto).execute()
+                if (response.isSuccessful) {
+                    android.util.Log.i("VehicleTracker", "전송 성공: ${response.code()}")
+                } else {
+                    android.util.Log.e("VehicleTracker", "전송 실패: ${response.code()} ${response.errorBody()?.string()}")
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("VehicleTracker", "API 통신 오류", e)
             }
-        } catch (e: Exception) {
-            android.util.Log.e("VehicleTracker", "API 통신 오류", e)
-        }
-    }.start()
-}
+        }.start()
+    }
 
 
 }

@@ -36,7 +36,12 @@ class BluetoothStateReceiver : BroadcastReceiver() {
      * 블루투스 기기 연결 처리
      */
     private fun handleBluetoothConnected(context: Context, intent: Intent) {
-        val device: BluetoothDevice? = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+        val device: BluetoothDevice? = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+    intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+} else {
+    @Suppress("DEPRECATION")
+    intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+}
         val deviceName = device?.name ?: "Unknown Device"
         val deviceAddress = device?.address ?: "Unknown Address"
 
@@ -53,6 +58,24 @@ class BluetoothStateReceiver : BroadcastReceiver() {
                 "차량에 연결되었습니다. 앱을 시작합니다."
             )
 
+            // BluetoothGpsService에 차량 연결 이벤트 전달 (서비스에 인텐트 전송)
+            try {
+                val serviceIntent = Intent(context, com.example.vehicletracker.BluetoothGpsService::class.java).apply {
+                    action = "com.example.vehicletracker.ACTION_VEHICLE_BLUETOOTH_CONNECTED"
+                    putExtra("bluetooth_device_name", deviceName)
+                    putExtra("bluetooth_device_address", deviceAddress)
+                }
+                Log.i(TAG, "서비스에 인텐트 전달 전: $deviceName ($deviceAddress)")
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    context.startForegroundService(serviceIntent)
+                } else {
+                    context.startService(serviceIntent)
+                }
+                Log.i(TAG, "BluetoothGpsService에 연결 이벤트 전달 완료")
+            } catch (e: Exception) {
+                Log.e(TAG, "BluetoothGpsService 인텐트 전달 실패", e)
+            }
+
             // 앱 자동 실행
             launchVehicleTrackerApp(context, deviceName, deviceAddress)
         } else {
@@ -64,7 +87,12 @@ class BluetoothStateReceiver : BroadcastReceiver() {
      * 블루투스 기기 연결 해제 처리
      */
     private fun handleBluetoothDisconnected(context: Context, intent: Intent) {
-        val device: BluetoothDevice? = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+        val device: BluetoothDevice? = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+    intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+} else {
+    @Suppress("DEPRECATION")
+    intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+}
         val deviceName = device?.name ?: "Unknown Device"
         val deviceAddress = device?.address ?: "Unknown Address"
 

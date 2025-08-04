@@ -3,22 +3,36 @@ package com.example.vehicletracker
 import android.app.Activity
 import android.os.Bundle
 import android.util.Log
-import android.webkit.*
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceError
+import android.webkit.ConsoleMessage
 import android.widget.TextView
 import android.widget.Toast
 import android.view.KeyEvent
+import android.Manifest
+import android.content.pm.PackageManager
+import android.content.Intent
+import android.os.Build
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 
 class MainActivity : Activity() {
 
     private lateinit var webView: WebView
     private lateinit var statusText: TextView
-    private var backPressTime: Long = 0  // 클래스 멤버 변수로 이동
+    private var backPressTime: Long = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // UI 요소 초기화
+        // 권한 체크 및 서비스 시작
+        startBluetoothGpsServiceIfPermitted()
+
+        // UI 요소 초기화 (WebView, statusText 등)
         initViews()
 
         // WebView 설정
@@ -31,6 +45,48 @@ class MainActivity : Activity() {
         webView.postDelayed({
             loadWebPage()
         }, 5000)
+    }
+
+    private fun startBluetoothGpsServiceIfPermitted() {
+        val requiredPermissions = mutableListOf(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+            Manifest.permission.FOREGROUND_SERVICE
+        )
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            requiredPermissions.add(Manifest.permission.FOREGROUND_SERVICE_LOCATION)
+            requiredPermissions.add(Manifest.permission.BLUETOOTH_CONNECT)
+            requiredPermissions.add(Manifest.permission.BLUETOOTH_SCAN)
+        }
+        
+        val notGranted = requiredPermissions.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+        
+        if (notGranted.isEmpty()) {
+            // 모든 권한이 허용된 경우에만 서비스 시작
+            val serviceIntent = Intent(this, BluetoothGpsService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent)
+            } else {
+                startService(serviceIntent)
+            }
+        } else {
+            ActivityCompat.requestPermissions(this, notGranted.toTypedArray(), 101)
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int, 
+        permissions: Array<out String>, 
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 101) {
+            // 모든 권한이 허용됐는지 다시 체크
+            startBluetoothGpsServiceIfPermitted()
+        }
     }
 
     private fun initViews() {
@@ -105,8 +161,6 @@ class MainActivity : Activity() {
                 updateStatus("로딩 중... ($newProgress%)")
             }
         }
-
-        // 개발자 도구 활성화 제거
     }
 
     // 하드웨어 뒤로가기 버튼 처리
