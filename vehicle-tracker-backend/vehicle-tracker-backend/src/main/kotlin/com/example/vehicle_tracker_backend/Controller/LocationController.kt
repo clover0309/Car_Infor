@@ -6,6 +6,8 @@ import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.text.SimpleDateFormat
+import java.util.*
 
 @RestController
 @RequestMapping("/api/location")
@@ -27,7 +29,7 @@ class LocationController(
         val deviceName: String,
         val latitude: Double,
         val longitude: Double,
-        val timestamp: String? = null,
+        val timestamp: LocalDateTime? = null,
         val speed: Int = 0
     )
 
@@ -38,7 +40,7 @@ class LocationController(
             deviceName = req.deviceName,
             latitude = req.latitude,
             longitude = req.longitude,
-            timestamp = req.timestamp ?: java.time.ZonedDateTime.now(java.time.ZoneId.of("Asia/Seoul")).format(DateTimeFormatter.ofPattern("yyyy-MM-dd aHH:mm:ss")),
+            timestamp = req.timestamp ?: LocalDateTime.now(),
             speed = req.speed
         )
         deviceLocationService.saveLocation(entity)

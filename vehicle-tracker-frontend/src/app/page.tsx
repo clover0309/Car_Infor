@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { vehicleApi, VehicleStatus } from './lib/api';
+import KakaoMap from './components/KakaoMap';
 
 interface DeviceTrackingInfo {
   deviceId: string;
@@ -35,16 +36,20 @@ export default function Home() {
   // 현재 상태 조회
   const fetchCurrentStatus = async () => {
     const status = await vehicleApi.getCurrentStatus();
+    console.log('Received status:', status); // 디버깅용
+    console.log('Timestamp format:', status?.timestamp); // timestamp 형식 확인
     setCurrentStatus(status);
   };
 
   // 상태 이력 조회 및 디바이스 추적 정보 업데이트
-  const fetchStatusHistory = async () => {
-    const history = await vehicleApi.getStatusHistory();
-    setStatusHistory(history);
-    
-    // 디바이스별 추적 정보 업데이트
-    updateDeviceTracking(history);
+    const fetchStatusHistory = async () => {
+      const history = await vehicleApi.getStatusHistory();
+      console.log('Received history:', history); // 디버깅용
+      if (history.length > 0) {
+          console.log('First history timestamp:', history[0].timestamp); // 형식 확인
+      }
+      setStatusHistory(history);
+      updateDeviceTracking(history);
   };
 
   // 디바이스별 추적 정보 업데이트 함수
@@ -120,57 +125,72 @@ export default function Home() {
     initializeData();
   }, []);
 
-  // 시간 포맷팅 함수 (타임존 변환 없이)
+  // 시간 포맷팅 함수 (KST 시간 문자열을 올바르게 처리)
   const formatTimestamp = (timestamp: string) => {
     try {
-      // ISO 문자열을 직접 Date 객체로 변환 (타임존 변환 없이)
-      const date = new Date(timestamp);
+      // 이미 "YYYY-MM-DD HH:mm:ss" 형식이면 그대로 반환 (백엔드에서 KST로 보낸 것)
+      if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(timestamp)) {
+        return timestamp; // KST 시간을 그대로 표시
+      }
       
-      // 로컬 시간으로 표시 (타임존 변환 방지)
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      const hours = String(date.getHours()).padStart(2, '0');
-      const minutes = String(date.getMinutes()).padStart(2, '0');
-      const seconds = String(date.getSeconds()).padStart(2, '0');
+      // ISO-8601 형식이면 KST로 변환
+      if (timestamp.includes('T') || timestamp.includes('Z') || timestamp.includes('+')) {
+        const date = new Date(timestamp);
+        if (isNaN(date.getTime())) {
+          return timestamp; // 파싱 실패 시 원본 반환
+        }
+        
+        // KST로 변환하여 "YYYY-MM-DD HH:mm:ss" 형식으로 표시
+        const kstDate = new Date(date.getTime() + (9 * 60 * 60 * 1000)); // UTC + 9시간
+        const year = kstDate.getUTCFullYear();
+        const month = String(kstDate.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(kstDate.getUTCDate()).padStart(2, '0');
+        const hours = String(kstDate.getUTCHours()).padStart(2, '0');
+        const minutes = String(kstDate.getUTCMinutes()).padStart(2, '0');
+        const seconds = String(kstDate.getUTCSeconds()).padStart(2, '0');
+        
+        return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+      }
       
-      return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-    } catch (error) {
-      console.error('시간 포맷팅 오류:', error);
+      // 기타 형식은 그대로 반환
       return timestamp;
+    } catch (error) {
+      console.error('Timestamp formatting error:', error);
+      return timestamp; // 에러 시 원본 반환
     }
   };
 
   // 시간만 추출하는 함수
   const formatTimeOnly = (timestamp: string) => {
-    try {
-      const date = new Date(timestamp);
-      const hours = String(date.getHours()).padStart(2, '0');
-      const minutes = String(date.getMinutes()).padStart(2, '0');
-      const seconds = String(date.getSeconds()).padStart(2, '0');
-      return `${hours}:${minutes}:${seconds}`;
-    } catch (error) {
-      return timestamp;
-    }
+    const timePart = timestamp.split(' ')[1];
+    return timePart || timestamp;
   };
 
   // 연결 지속 시간 계산
   const calculateDuration = (connectionTime: string, lastUpdate: string) => {
     try {
-      const start = new Date(connectionTime).getTime();
-      const end = new Date(lastUpdate).getTime();
-      const durationMs = end - start;
-      
-      const minutes = Math.floor(durationMs / 60000);
-      const seconds = Math.floor((durationMs % 60000) / 1000);
-      
-      if (minutes > 0) {
-        return `${minutes}분 ${seconds}초`;
-      } else {
-        return `${seconds}초`;
-      }
+        // "yyyy-MM-dd HH:mm:ss" 형식 파싱
+        const parseLocalTime = (timeStr: string) => {
+            const [datePart, timePart] = timeStr.split(' ');
+            const [year, month, day] = datePart.split('-').map(Number);
+            const [hours, minutes, seconds] = timePart.split(':').map(Number);
+            return new Date(year, month - 1, day, hours, minutes, seconds).getTime();
+        };
+        
+        const start = parseLocalTime(connectionTime);
+        const end = parseLocalTime(lastUpdate);
+        const durationMs = end - start;
+        
+        const minutes = Math.floor(durationMs / 60000);
+        const seconds = Math.floor((durationMs % 60000) / 1000);
+        
+        if (minutes > 0) {
+            return `${minutes}분 ${seconds}초`;
+        } else {
+            return `${seconds}초`;
+        }
     } catch (error) {
-      return '계산 불가';
+        return '계산 불가';
     }
   };
 
@@ -250,10 +270,12 @@ export default function Home() {
                     <p>경도: {currentStatus.location.longitude.toFixed(6)}</p>
                   </div>
                   <div className="mt-2">
-                    {/* 카카오맵 표시 영역 (추후 구현) */}
-                    <div className="bg-gray-200 h-32 rounded flex items-center justify-center text-gray-500">
-                      카카오지도 (준비 중)
-                    </div>
+                    {/* 카카오 지도 표시 */}
+                    <KakaoMap 
+                      latitude={currentStatus.location.latitude} 
+                      longitude={currentStatus.location.longitude}
+                      height="200px"
+                    />
                   </div>
                 </>
               ) : (
@@ -410,16 +432,23 @@ export default function Home() {
       </div>
 
       {/* 디버그 정보 (타임스탬프 확인용) */}
-      <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
-        <h3 className="text-lg font-medium text-yellow-800 mb-2">🔧 디버그 정보</h3>
-        <div className="text-sm text-yellow-700 space-y-1">
-          <p>• 현재 로컬 시간: {new Date().toLocaleString()}</p>
-          <p>• 현재 ISO 시간: {new Date().toISOString()}</p>
-          {currentStatus && (
+    <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
+    <h3 className="text-lg font-medium text-yellow-800 mb-2">🔧 디버그 정보</h3>
+    <div className="text-sm text-yellow-700 space-y-1">
+        <p>• 현재 로컬 시간: {new Date().toLocaleString('ko-KR', { 
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        }).replace(/\. /g, '-').replace(/\./g, '').replace(/:/g, ':')}</p>
+        {currentStatus && (
             <p>• 마지막 수신 타임스탬프: {currentStatus.timestamp}</p>
-          )}
-        </div>
-      </div>
+        )}
+    </div>
+    </div>
     </main>
   );
 }

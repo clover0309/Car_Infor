@@ -232,7 +232,7 @@ class BluetoothGpsService : Service() {
 
     private fun sendUpdateToBackend() {
         val engineStatus = if (ignitionOn) "ON" else "OFF"
-        val timestamp = java.time.Instant.now().toString()
+        val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
         val btName = currentDevice?.name ?: currentDeviceName ?: "Unknown Device"
         
         val dto = com.example.vehicletracker.api.VehicleStatusDto(

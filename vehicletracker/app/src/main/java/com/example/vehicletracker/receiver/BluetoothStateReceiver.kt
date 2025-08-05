@@ -11,6 +11,8 @@ import com.example.vehicletracker.utils.NotificationHelper
 import com.example.vehicletracker.api.VehicleStatusDto
 import com.example.vehicletracker.api.VehicleLocation
 import com.example.vehicletracker.api.RetrofitInstance
+import java.text.SimpleDateFormat
+import java.util.*
 
 class BluetoothStateReceiver : BroadcastReceiver() {
 
@@ -207,12 +209,14 @@ class BluetoothStateReceiver : BroadcastReceiver() {
                     android.provider.Settings.Secure.ANDROID_ID
                 )
                 
+                val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
+
                 val dto = VehicleStatusDto(
                     deviceId = deviceId,
                     bluetoothDevice = deviceName,
                     engineStatus = "OFF",
                     speed = 0f,
-                    timestamp = java.time.Instant.now().toString(),
+                    timestamp = timestamp,
                     location = null // 연결 해제 시에는 위치 정보 없음
                 )
                 

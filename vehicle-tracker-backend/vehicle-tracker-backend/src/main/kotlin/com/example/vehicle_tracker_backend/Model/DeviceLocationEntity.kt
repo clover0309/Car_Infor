@@ -2,6 +2,9 @@ package com.example.vehicle_tracker_backend.Model
 
 import jakarta.persistence.*
 import java.time.LocalDateTime
+import com.fasterxml.jackson.annotation.JsonFormat
+import java.text.SimpleDateFormat
+import java.util.*
 
 @Entity
 @Table(name = "device_location")
@@ -23,7 +26,8 @@ data class DeviceLocationEntity(
     val longitude: Double,
 
     @Column(nullable = false)
-    val timestamp: String = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd aHH:mm:ss")),
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "Asia/Seoul")
+    val timestamp: LocalDateTime = LocalDateTime.now(),
 
     @Column(nullable = false)
     val speed: Int = 0

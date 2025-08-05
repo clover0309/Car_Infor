@@ -10,6 +10,6 @@ data class VehicleStatusDto(
     val bluetoothDevice: String?,
     val engineStatus: String, // "ON" or "OFF"
     val speed: Float?,
-    val timestamp: String, // ISO 8601
+    val timestamp: String,
     val location: VehicleLocation?
 )
