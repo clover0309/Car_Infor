@@ -66,13 +66,43 @@ class BluetoothGpsService : Service() {
             val deviceAddress = intent.getStringExtra("bluetooth_device_address")
             Log.i("BlueToothGpsService", "ACTION_VEHICLE_BLUETOOTH_CONNECTED 수신: $deviceName ($deviceAddress)")
             if (deviceName != null && deviceAddress != null) {
-                val device = BluetoothAdapter.getDefaultAdapter()?.bondedDevices?.find { it.address == deviceAddress }
-                currentDevice = device
-                currentDeviceName = deviceName
-                currentDeviceAddress = deviceAddress
-                ignitionOn = true
-                sendUpdateToBackend()
+    val device = BluetoothAdapter.getDefaultAdapter()?.bondedDevices?.find { it.address == deviceAddress }
+    currentDevice = device
+    currentDeviceName = deviceName
+    currentDeviceAddress = deviceAddress
+    ignitionOn = true
+
+    // 신규 DeviceID 감지 → 존재 여부 확인 → 사용자 입력 → 등록 → 위치 전송
+    val ctx = this
+    com.example.vehicletracker.api.RetrofitInstance.api.checkDeviceExists(deviceId)
+        .enqueue(object : retrofit2.Callback<Boolean> {
+            override fun onResponse(call: retrofit2.Call<Boolean>, response: retrofit2.Response<Boolean>) {
+                val exists = response.body() ?: false
+                if (!exists) {
+                    // 사용자에게 이름 입력받아 등록
+                    com.example.vehicletracker.util.DevicePromptUtil.promptDeviceName(ctx) { userInputName ->
+                        val req = com.example.vehicletracker.api.DeviceRegisterRequest(deviceId, userInputName)
+                        com.example.vehicletracker.api.RetrofitInstance.api.registerDevice(req)
+                            .enqueue(object : retrofit2.Callback<Void> {
+                                override fun onResponse(call: retrofit2.Call<Void>, response: retrofit2.Response<Void>) {
+                                    // 등록 성공 후 위치 전송
+                                    sendUpdateToBackend()
+                                }
+                                override fun onFailure(call: retrofit2.Call<Void>, t: Throwable) {
+                                    android.util.Log.e("VehicleTracker", "기기 등록 실패", t)
+                                }
+                            })
+                    }
+                } else {
+                    // 이미 등록된 경우 바로 위치 전송
+                    sendUpdateToBackend()
+                }
             }
+            override fun onFailure(call: retrofit2.Call<Boolean>, t: Throwable) {
+                android.util.Log.e("VehicleTracker", "기기 존재 확인 실패", t)
+            }
+        })
+}
         }
         return START_STICKY
     }
@@ -124,34 +154,37 @@ class BluetoothGpsService : Service() {
     }
 
     private fun sendUpdateToBackend() {
-        val engineStatus = if (ignitionOn) "ON" else "OFF"
-        val timestamp = java.time.Instant.now().toString()
-        val btName = currentDevice?.name ?: currentDeviceName
-        val dto = com.example.vehicletracker.api.VehicleStatusDto(
-            deviceId = deviceId,
-            bluetoothDevice = btName,
-            engineStatus = engineStatus,
-            speed = lastSpeed,
-            timestamp = timestamp,
-            location = com.example.vehicletracker.api.VehicleLocation(
-                latitude = lastLocation?.latitude,
-                longitude = lastLocation?.longitude
-            )
-        )
-        android.util.Log.d("VehicleTracker", "API Send: $dto")
-        Thread {
-            try {
-                val response = com.example.vehicletracker.api.RetrofitInstance.api.sendVehicleStatus(dto).execute()
-                if (response.isSuccessful) {
-                    android.util.Log.i("VehicleTracker", "전송 성공: ${response.code()}")
-                } else {
-                    android.util.Log.e("VehicleTracker", "전송 실패: ${response.code()} ${response.errorBody()?.string()}")
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("VehicleTracker", "API 통신 오류", e)
-            }
-        }.start()
+    val timestamp = java.time.ZonedDateTime.now(java.time.ZoneId.of("Asia/Seoul")).format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd aHH:mm:ss"))
+    val btName = currentDevice?.name ?: currentDeviceName ?: "Unknown Device"
+    val latitude = lastLocation?.latitude
+    val longitude = lastLocation?.longitude
+    if (latitude == null || longitude == null) {
+        android.util.Log.e("VehicleTracker", "위치 정보 없음, 전송 생략")
+        return
     }
+    val speedInt = lastSpeed.toInt()
+val dto = com.example.vehicletracker.api.LocationRequest(
+    deviceId = deviceId,
+    deviceName = btName,
+    latitude = latitude,
+    longitude = longitude,
+    timestamp = timestamp,
+    speed = speedInt
+)
+    android.util.Log.d("VehicleTracker", "위치 전송: $dto")
+    Thread {
+        try {
+            val response = com.example.vehicletracker.api.RetrofitInstance.api.sendLocation(dto).execute()
+            if (response.isSuccessful) {
+                android.util.Log.i("VehicleTracker", "위치 전송 성공: ${response.code()}")
+            } else {
+                android.util.Log.e("VehicleTracker", "위치 전송 실패: ${response.code()} ${response.errorBody()?.string()}")
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("VehicleTracker", "위치 API 통신 오류", e)
+        }
+    }.start()
+}
 
 
 }

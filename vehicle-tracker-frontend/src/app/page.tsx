@@ -109,12 +109,12 @@ export default function Home() {
               </p>
               <p><strong>속도:</strong> 
                 <span className="ml-2 text-lg font-mono">
-                  {currentStatus.speed} km/h
+                  {Math.round(currentStatus.speed)} km/h
                 </span>
               </p>
               <p><strong>마지막 업데이트:</strong> 
                 <span className="ml-2 text-sm">
-                  {new Date(currentStatus.timestamp).toLocaleString()}
+                  {new Date(currentStatus.timestamp.replace(' ', 'T')).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}
                 </span>
               </p>
             </div>
@@ -174,9 +174,9 @@ export default function Home() {
                     </span>
                   </div>
                   <div className="text-right">
-                    <div className="text-sm font-mono">{status.speed} km/h</div>
+                    <div className="text-sm font-mono">{Math.round(status.speed)} km/h</div>
                     <div className="text-xs text-gray-500">
-                      {new Date(status.timestamp).toLocaleTimeString()}
+                      {new Date(status.timestamp.replace(' ', 'T')).toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul' })}
                     </div>
                   </div>
                 </div>
