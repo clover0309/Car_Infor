@@ -29,7 +29,16 @@ class VehicleController {
             statusHistory.poll()
         }
         
-        println("차량 상태 업데이트: $status") // 디버깅용 로그
+        // 엔진 상태에 따른 구분된 로깅
+        if (status.engineStatus == "ON") {
+            println("🚗 [차량 시동 ON] ${status.bluetoothDevice} - 속도: ${status.speed}km/h, 기기: ${status.deviceId}")
+            if (status.location != null) {
+                println("📍 [위치 정보] 위도: ${status.location.latitude}, 경도: ${status.location.longitude}")
+            }
+        } else {
+            println("🔴 [차량 시동 OFF] ${status.bluetoothDevice} - 연결 해제됨, 기기: ${status.deviceId}")
+            println("⏰ [연결 해제 시간] ${status.timestamp}")
+        }
         
         return mapOf("message" to "Status updated successfully")
     }
@@ -58,6 +67,15 @@ class VehicleController {
     @GetMapping("/current")
     fun getCurrentStatus(): Map<String, Any?> {
         val latestStatus = statusHistory.lastOrNull()
+        
+        // 현재 상태 로그 출력
+        if (latestStatus != null) {
+            val statusIcon = if (latestStatus.engineStatus == "ON") "🟢" else "🔴"
+            println("$statusIcon [현재 상태 조회] ${latestStatus.bluetoothDevice} - ${latestStatus.engineStatus}")
+        } else {
+            println("❓ [현재 상태 조회] 연결된 차량 없음")
+        }
+        
         return mapOf(
             "status" to latestStatus,
             "hasData" to (latestStatus != null)
@@ -66,14 +84,18 @@ class VehicleController {
     
     @GetMapping("/history")
     fun getStatusHistory(): List<VehicleStatus> {
-        return statusHistory.toList()
+        val historyList = statusHistory.toList()
+        println("📊 [이력 조회] 총 ${historyList.size}개 기록 반환")
+        return historyList
     }
     
     @GetMapping("/test")
     fun testEndpoint(): Map<String, String> {
+        println("🔧 [연결 테스트] 백엔드 서버 정상 동작 중")
         return mapOf(
             "message" to "Vehicle Tracker Backend is running!",
-            "timestamp" to java.time.LocalDateTime.now().toString()
+            "timestamp" to java.time.LocalDateTime.now().toString(),
+            "totalRecords" to statusHistory.size.toString()
         )
     }
 }

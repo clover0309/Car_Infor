@@ -32,15 +32,25 @@ class BluetoothGpsService : Service() {
     private var ignitionOn: Boolean = false
     private var lastSpeed: Float = 0f
     private var lastLocation: Location? = null
-    private val deviceId: String by lazy { android.provider.Settings.Secure.getString(contentResolver, android.provider.Settings.Secure.ANDROID_ID) 
+    private val deviceId: String by lazy { 
+        android.provider.Settings.Secure.getString(
+            contentResolver, 
+            android.provider.Settings.Secure.ANDROID_ID
+        ) 
     }
     private lateinit var bluetoothReceiver: BluetoothStateReceiver
 
+    companion object {
+        private const val TAG = "BluetoothGpsService"
+        const val ACTION_VEHICLE_BLUETOOTH_CONNECTED = "com.example.vehicletracker.ACTION_VEHICLE_BLUETOOTH_CONNECTED"
+        const val ACTION_VEHICLE_BLUETOOTH_DISCONNECTED = "com.example.vehicletracker.ACTION_VEHICLE_BLUETOOTH_DISCONNECTED"
+        const val ACTION_BLUETOOTH_TURNED_OFF = "com.example.vehicletracker.ACTION_BLUETOOTH_TURNED_OFF"
+    }
 
     override fun onCreate() {
         super.onCreate()
         try {
-            Log.d("BlueToothGpsService", "onCreate called");
+            Log.d(TAG, "onCreate called")
             bluetoothReceiver = BluetoothStateReceiver()
             val filter = IntentFilter().apply {
                 addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
@@ -48,89 +58,147 @@ class BluetoothGpsService : Service() {
                 addAction(BluetoothAdapter.ACTION_STATE_CHANGED)
             }
             registerReceiver(bluetoothReceiver, filter)
+            
             // Initialize fusedLocationClient before using it
-            fusedLocationClient = com.google.android.gms.location.LocationServices.getFusedLocationProviderClient(this)
+            fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
             startForegroundServiceNotification()
             startLocationUpdates()
         } catch (e: Exception) {
-            Log.e("BlueToothGpsService", "onCreate crash", e)
+            Log.e(TAG, "onCreate crash", e)
         }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.i("BlueToothGpsService", "onStartCommand called, action: ${intent?.action}")
-        Log.i("BlueToothGpsService", "ACTION_VEHICLE_BLUETOOTH_CONNECTED 수신: ...")
-        // 커스텀 인텐트로 차량 블루투스 연결 이벤트 처리
-        if (intent != null && intent.action == "com.example.vehicletracker.ACTION_VEHICLE_BLUETOOTH_CONNECTED") {
-            val deviceName = intent.getStringExtra("bluetooth_device_name")
-            val deviceAddress = intent.getStringExtra("bluetooth_device_address")
-            Log.i("BlueToothGpsService", "ACTION_VEHICLE_BLUETOOTH_CONNECTED 수신: $deviceName ($deviceAddress)")
-            if (deviceName != null && deviceAddress != null) {
-    val device = BluetoothAdapter.getDefaultAdapter()?.bondedDevices?.find { it.address == deviceAddress }
-    currentDevice = device
-    currentDeviceName = deviceName
-    currentDeviceAddress = deviceAddress
-    ignitionOn = true
-
-    // 신규 DeviceID 감지 → 존재 여부 확인 → 사용자 입력 → 등록 → 위치 전송
-    val ctx = this
-    com.example.vehicletracker.api.RetrofitInstance.api.checkDeviceExists(deviceId)
-        .enqueue(object : retrofit2.Callback<Boolean> {
-            override fun onResponse(call: retrofit2.Call<Boolean>, response: retrofit2.Response<Boolean>) {
-                val exists = response.body() ?: false
-                if (!exists) {
-                    // 사용자에게 이름 입력받아 등록
-                    com.example.vehicletracker.util.DevicePromptUtil.promptDeviceName(ctx) { userInputName ->
-                        val req = com.example.vehicletracker.api.DeviceRegisterRequest(deviceId, userInputName)
-                        com.example.vehicletracker.api.RetrofitInstance.api.registerDevice(req)
-                            .enqueue(object : retrofit2.Callback<Void> {
-                                override fun onResponse(call: retrofit2.Call<Void>, response: retrofit2.Response<Void>) {
-                                    // 등록 성공 후 위치 전송
-                                    sendUpdateToBackend()
-                                }
-                                override fun onFailure(call: retrofit2.Call<Void>, t: Throwable) {
-                                    android.util.Log.e("VehicleTracker", "기기 등록 실패", t)
-                                }
-                            })
-                    }
-                } else {
-                    // 이미 등록된 경우 바로 위치 전송
-                    sendUpdateToBackend()
-                }
+        Log.i(TAG, "onStartCommand called, action: ${intent?.action}")
+        
+        when (intent?.action) {
+            ACTION_VEHICLE_BLUETOOTH_CONNECTED -> {
+                handleVehicleBluetoothConnected(intent)
             }
-            override fun onFailure(call: retrofit2.Call<Boolean>, t: Throwable) {
-                android.util.Log.e("VehicleTracker", "기기 존재 확인 실패", t)
+            ACTION_VEHICLE_BLUETOOTH_DISCONNECTED -> {
+                handleVehicleBluetoothDisconnected(intent)
             }
-        })
-}
+            ACTION_BLUETOOTH_TURNED_OFF -> {
+                handleBluetoothTurnedOff(intent)
+            }
         }
+        
         return START_STICKY
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        unregisterReceiver(bluetoothReceiver)
-        fusedLocationClient.removeLocationUpdates(locationCallback)
+        try {
+            unregisterReceiver(bluetoothReceiver)
+            fusedLocationClient.removeLocationUpdates(locationCallback)
+        } catch (e: Exception) {
+            Log.e(TAG, "onDestroy 중 오류", e)
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    /**
+     * 차량 블루투스 연결 처리
+     */
+    private fun handleVehicleBluetoothConnected(intent: Intent) {
+        val deviceName = intent.getStringExtra("bluetooth_device_name")
+        val deviceAddress = intent.getStringExtra("bluetooth_device_address")
+        
+        Log.i(TAG, "차량 블루투스 연결: $deviceName ($deviceAddress)")
+        
+        if (deviceName != null && deviceAddress != null) {
+            val device = BluetoothAdapter.getDefaultAdapter()?.bondedDevices?.find { 
+                it.address == deviceAddress 
+            }
+            
+            currentDevice = device
+            currentDeviceName = deviceName
+            currentDeviceAddress = deviceAddress
+            ignitionOn = true
+            
+            // 즉시 연결 상태 전송
+            sendUpdateToBackend()
+            
+            Log.i(TAG, "차량 추적 시작: $deviceName")
+        }
+    }
+
+    /**
+     * 차량 블루투스 연결 해제 처리
+     */
+    private fun handleVehicleBluetoothDisconnected(intent: Intent) {
+        val deviceName = intent.getStringExtra("bluetooth_device_name")
+        val deviceAddress = intent.getStringExtra("bluetooth_device_address")
+        
+        Log.i(TAG, "차량 블루투스 연결 해제: $deviceName ($deviceAddress)")
+        
+        // 즉시 OFF 상태 전송
+        ignitionOn = false
+        sendUpdateToBackend()
+        
+        // 현재 추적 중인 기기 정보 초기화
+        currentDevice = null
+        currentDeviceName = null
+        currentDeviceAddress = null
+        
+        Log.i(TAG, "차량 추적 중지: $deviceName")
+    }
+
+    /**
+     * 블루투스 어댑터 꺼짐 처리
+     */
+    private fun handleBluetoothTurnedOff(intent: Intent) {
+        val deviceName = intent.getStringExtra("bluetooth_device_name")
+        val deviceAddress = intent.getStringExtra("bluetooth_device_address")
+        
+        Log.i(TAG, "블루투스 어댑터 꺼짐으로 인한 연결 해제: $deviceName ($deviceAddress)")
+        
+        // 블루투스가 꺼진 경우에도 OFF 상태 전송
+        if (ignitionOn) {
+            currentDeviceName = deviceName
+            currentDeviceAddress = deviceAddress
+            ignitionOn = false
+            sendUpdateToBackend()
+        }
+        
+        // 현재 추적 중인 기기 정보 초기화
+        currentDevice = null
+        currentDeviceName = null
+        currentDeviceAddress = null
+        
+        Log.i(TAG, "블루투스 꺼짐으로 인한 차량 추적 중지")
+    }
+
     private fun startForegroundServiceNotification() {
         val channelId = "vehicle_tracker_channel"
         val channelName = "Vehicle Tracker Service"
+        
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val chan = NotificationChannel(channelId, channelName, NotificationManager.IMPORTANCE_LOW)
+            val chan = NotificationChannel(
+                channelId, 
+                channelName, 
+                NotificationManager.IMPORTANCE_LOW
+            )
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.createNotificationChannel(chan)
         }
+        
         val notificationIntent = Intent(this, MainActivity::class.java)
-        val pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE)
+        val pendingIntent = PendingIntent.getActivity(
+            this, 
+            0, 
+            notificationIntent, 
+            PendingIntent.FLAG_IMMUTABLE
+        )
+        
         val notification: Notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle("차량 정보 추적 서비스 실행중")
             .setContentText("블루투스 및 GPS 상태를 모니터링합니다.")
             .setSmallIcon(android.R.drawable.ic_menu_mylocation)
             .setContentIntent(pendingIntent)
             .build()
+            
         startForeground(1, notification)
     }
 
@@ -140,51 +208,64 @@ class BluetoothGpsService : Service() {
                 val location = locationResult.lastLocation
                 lastLocation = location
                 lastSpeed = location?.speed ?: 0f
-                if (ignitionOn) {
+                
+                // 차량이 연결되어 있고 시동이 켜진 상태일 때만 전송
+                if (ignitionOn && currentDeviceName != null) {
                     sendUpdateToBackend()
                 }
             }
         }
+        
         val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 2000L)
             .setMinUpdateIntervalMillis(1000L)
             .build()
-        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
+            
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == 
+            android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            fusedLocationClient.requestLocationUpdates(
+                locationRequest, 
+                locationCallback, 
+                Looper.getMainLooper()
+            )
         }
     }
 
     private fun sendUpdateToBackend() {
-    val timestamp = java.time.ZonedDateTime.now(java.time.ZoneId.of("Asia/Seoul")).format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd aHH:mm:ss"))
-    val btName = currentDevice?.name ?: currentDeviceName ?: "Unknown Device"
-    val latitude = lastLocation?.latitude
-    val longitude = lastLocation?.longitude
-    if (latitude == null || longitude == null) {
-        android.util.Log.e("VehicleTracker", "위치 정보 없음, 전송 생략")
-        return
-    }
-    val speedInt = lastSpeed.toInt()
-val dto = com.example.vehicletracker.api.LocationRequest(
-    deviceId = deviceId,
-    deviceName = btName,
-    latitude = latitude,
-    longitude = longitude,
-    timestamp = timestamp,
-    speed = speedInt
-)
-    android.util.Log.d("VehicleTracker", "위치 전송: $dto")
-    Thread {
-        try {
-            val response = com.example.vehicletracker.api.RetrofitInstance.api.sendLocation(dto).execute()
-            if (response.isSuccessful) {
-                android.util.Log.i("VehicleTracker", "위치 전송 성공: ${response.code()}")
+        val engineStatus = if (ignitionOn) "ON" else "OFF"
+        val timestamp = java.time.Instant.now().toString()
+        val btName = currentDevice?.name ?: currentDeviceName ?: "Unknown Device"
+        
+        val dto = com.example.vehicletracker.api.VehicleStatusDto(
+            deviceId = deviceId,
+            bluetoothDevice = btName,
+            engineStatus = engineStatus,
+            speed = if (ignitionOn) lastSpeed else 0f, // OFF 상태일 때는 속도 0
+            timestamp = timestamp,
+            location = if (ignitionOn && lastLocation != null) {
+                com.example.vehicletracker.api.VehicleLocation(
+                    latitude = lastLocation?.latitude,
+                    longitude = lastLocation?.longitude
+                )
             } else {
-                android.util.Log.e("VehicleTracker", "위치 전송 실패: ${response.code()} ${response.errorBody()?.string()}")
+                null // OFF 상태일 때는 위치 정보 없음
             }
-        } catch (e: Exception) {
-            android.util.Log.e("VehicleTracker", "위치 API 통신 오류", e)
-        }
-    }.start()
-}
-
-
+        )
+        
+        Log.d(TAG, "API Send: $dto")
+        
+        Thread {
+            try {
+                val response = com.example.vehicletracker.api.RetrofitInstance.api
+                    .sendVehicleStatus(dto).execute()
+                    
+                if (response.isSuccessful) {
+                    Log.i(TAG, "상태 전송 성공: ${response.code()}")
+                } else {
+                    Log.e(TAG, "상태 전송 실패: ${response.code()} ${response.errorBody()?.string()}")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "API 통신 오류", e)
+            }
+        }.start()
+    }
 }

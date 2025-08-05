@@ -3,9 +3,25 @@
 import { useEffect, useState } from 'react';
 import { vehicleApi, VehicleStatus } from './lib/api';
 
+interface DeviceTrackingInfo {
+  deviceId: string;
+  bluetoothDevice: string;
+  isOnline: boolean;
+  lastEngineStatus: string;
+  lastSpeed: number;
+  lastLocation?: {
+    latitude: number;
+    longitude: number;
+  };
+  lastUpdate: string;
+  connectionTime?: string;
+  totalUpdates: number;
+}
+
 export default function Home() {
   const [currentStatus, setCurrentStatus] = useState<VehicleStatus | null>(null);
   const [statusHistory, setStatusHistory] = useState<VehicleStatus[]>([]);
+  const [deviceTracking, setDeviceTracking] = useState<Map<string, DeviceTrackingInfo>>(new Map());
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -22,10 +38,61 @@ export default function Home() {
     setCurrentStatus(status);
   };
 
-  // 상태 이력 조회
+  // 상태 이력 조회 및 디바이스 추적 정보 업데이트
   const fetchStatusHistory = async () => {
     const history = await vehicleApi.getStatusHistory();
     setStatusHistory(history);
+    
+    // 디바이스별 추적 정보 업데이트
+    updateDeviceTracking(history);
+  };
+
+  // 디바이스별 추적 정보 업데이트 함수
+  const updateDeviceTracking = (history: VehicleStatus[]) => {
+    const newDeviceTracking = new Map<string, DeviceTrackingInfo>();
+    
+    // 역순으로 정렬하여 최신 데이터를 우선 처리
+    const sortedHistory = [...history].sort((a, b) => 
+      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
+    
+    for (const status of sortedHistory) {
+      const deviceKey = `${status.deviceId}-${status.bluetoothDevice}`;
+      
+      if (!newDeviceTracking.has(deviceKey)) {
+        // 새로운 디바이스 추가
+        const isOnline = status.engineStatus === 'ON';
+        const deviceInfo: DeviceTrackingInfo = {
+          deviceId: status.deviceId,
+          bluetoothDevice: status.bluetoothDevice,
+          isOnline: isOnline,
+          lastEngineStatus: status.engineStatus,
+          lastSpeed: status.speed,
+          lastLocation: status.location,
+          lastUpdate: status.timestamp,
+          totalUpdates: 1
+        };
+        
+        // 연결 시작 시간 찾기 (가장 오래된 ON 상태)
+        const connectionStart = history
+          .filter(h => h.deviceId === status.deviceId && 
+                      h.bluetoothDevice === status.bluetoothDevice && 
+                      h.engineStatus === 'ON')
+          .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())[0];
+        
+        if (connectionStart) {
+          deviceInfo.connectionTime = connectionStart.timestamp;
+        }
+        
+        newDeviceTracking.set(deviceKey, deviceInfo);
+      } else {
+        // 기존 디바이스 업데이트 (카운트만 증가)
+        const existing = newDeviceTracking.get(deviceKey)!;
+        existing.totalUpdates++;
+      }
+    }
+    
+    setDeviceTracking(newDeviceTracking);
   };
 
   // 자동 새로고침 (5초마다)
@@ -52,6 +119,60 @@ export default function Home() {
 
     initializeData();
   }, []);
+
+  // 시간 포맷팅 함수 (타임존 변환 없이)
+  const formatTimestamp = (timestamp: string) => {
+    try {
+      // ISO 문자열을 직접 Date 객체로 변환 (타임존 변환 없이)
+      const date = new Date(timestamp);
+      
+      // 로컬 시간으로 표시 (타임존 변환 방지)
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const seconds = String(date.getSeconds()).padStart(2, '0');
+      
+      return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    } catch (error) {
+      console.error('시간 포맷팅 오류:', error);
+      return timestamp;
+    }
+  };
+
+  // 시간만 추출하는 함수
+  const formatTimeOnly = (timestamp: string) => {
+    try {
+      const date = new Date(timestamp);
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const seconds = String(date.getSeconds()).padStart(2, '0');
+      return `${hours}:${minutes}:${seconds}`;
+    } catch (error) {
+      return timestamp;
+    }
+  };
+
+  // 연결 지속 시간 계산
+  const calculateDuration = (connectionTime: string, lastUpdate: string) => {
+    try {
+      const start = new Date(connectionTime).getTime();
+      const end = new Date(lastUpdate).getTime();
+      const durationMs = end - start;
+      
+      const minutes = Math.floor(durationMs / 60000);
+      const seconds = Math.floor((durationMs % 60000) / 1000);
+      
+      if (minutes > 0) {
+        return `${minutes}분 ${seconds}초`;
+      } else {
+        return `${seconds}초`;
+      }
+    } catch (error) {
+      return '계산 불가';
+    }
+  };
 
   if (loading) {
     return (
@@ -109,12 +230,12 @@ export default function Home() {
               </p>
               <p><strong>속도:</strong> 
                 <span className="ml-2 text-lg font-mono">
-                  {Math.round(currentStatus.speed)} km/h
+                  {currentStatus.speed} km/h
                 </span>
               </p>
               <p><strong>마지막 업데이트:</strong> 
                 <span className="ml-2 text-sm">
-                  {new Date(currentStatus.timestamp.replace(' ', 'T')).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}
+                  {formatTimestamp(currentStatus.timestamp)}
                 </span>
               </p>
             </div>
@@ -157,12 +278,90 @@ export default function Home() {
         </button>
       </div>
 
-      {/* 실시간 경로 이력 */}
+      {/* 디바이스별 실시간 추적 현황 */}
       <div className="bg-white border border-gray-200 p-4 rounded-lg shadow-sm">
-        <h2 className="text-xl font-semibold mb-4">📊 실시간 이동 경로</h2>
+        <h2 className="text-xl font-semibold mb-4">🚗 디바이스별 실시간 추적 현황</h2>
+        {deviceTracking.size > 0 ? (
+          <div className="space-y-4">
+            {Array.from(deviceTracking.entries()).map(([deviceKey, info]) => (
+              <div key={deviceKey} className="border rounded-lg p-4">
+                <div className="flex justify-between items-start mb-3">
+                  <div className="flex items-center space-x-3">
+                    <div className={`w-3 h-3 rounded-full ${
+                      info.isOnline ? 'bg-green-500 animate-pulse' : 'bg-red-500'
+                    }`}></div>
+                    <div>
+                      <h3 className="font-semibold text-lg">{info.bluetoothDevice}</h3>
+                      <p className="text-sm text-gray-600">기기 ID: {info.deviceId}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className={`px-3 py-1 rounded-full text-white text-sm ${
+                      info.isOnline ? 'bg-green-500' : 'bg-red-500'
+                    }`}>
+                      {info.lastEngineStatus}
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <p className="text-gray-600">현재 속도</p>
+                    <p className="font-mono text-lg">{info.lastSpeed} km/h</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">마지막 업데이트</p>
+                    <p className="font-mono">{formatTimeOnly(info.lastUpdate)}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">총 업데이트 수</p>
+                    <p className="font-mono">{info.totalUpdates}회</p>
+                  </div>
+                  {info.connectionTime && (
+                    <div>
+                      <p className="text-gray-600">연결 지속 시간</p>
+                      <p className="font-mono">{calculateDuration(info.connectionTime, info.lastUpdate)}</p>
+                    </div>
+                  )}
+                </div>
+                
+                {info.lastLocation && (
+                  <div className="mt-3 bg-gray-50 p-2 rounded text-xs font-mono">
+                    📍 위도: {info.lastLocation.latitude.toFixed(6)}, 
+                    경도: {info.lastLocation.longitude.toFixed(6)}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8">
+            <div className="text-gray-500">🔍 연결된 디바이스 없음</div>
+            <p className="text-sm text-gray-400 mt-2">
+              차량 블루투스 연결 시 실시간으로 표시됩니다
+            </p>
+          </div>
+        )}
+        
+        <div className="mt-4 flex justify-between items-center">
+          <button 
+            onClick={fetchStatusHistory}
+            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+          >
+            데이터 새로고침
+          </button>
+          <div className="text-sm text-gray-500">
+            디바이스별 실시간 통합 표시
+          </div>
+        </div>
+      </div>
+
+      {/* 상세 이동 기록 (기존 유지) */}
+      <div className="bg-white border border-gray-200 p-4 rounded-lg shadow-sm">
+        <h2 className="text-xl font-semibold mb-4">📊 상세 이동 기록</h2>
         {statusHistory.length > 0 ? (
           <div className="space-y-2 max-h-60 overflow-y-auto">
-            {statusHistory.slice().reverse().slice(0, 10).map((status, index) => (
+            {statusHistory.slice().reverse().slice(0, 20).map((status, index) => (
               <div key={index} className="border-b pb-2">
                 <div className="flex justify-between items-center">
                   <div className="flex items-center space-x-2">
@@ -174,9 +373,9 @@ export default function Home() {
                     </span>
                   </div>
                   <div className="text-right">
-                    <div className="text-sm font-mono">{Math.round(status.speed)} km/h</div>
+                    <div className="text-sm font-mono">{status.speed} km/h</div>
                     <div className="text-xs text-gray-500">
-                      {new Date(status.timestamp.replace(' ', 'T')).toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul' })}
+                      {formatTimeOnly(status.timestamp)}
                     </div>
                   </div>
                 </div>
@@ -192,22 +391,10 @@ export default function Home() {
           <div className="text-center py-8">
             <div className="text-gray-500">📋 이동 기록 없음</div>
             <p className="text-sm text-gray-400 mt-2">
-              차량 이동 시 실시간으로 경로가 표시됩니다
+              차량 이동 시 상세 기록이 표시됩니다
             </p>
           </div>
         )}
-        
-        <div className="mt-4 flex justify-between items-center">
-          <button 
-            onClick={fetchStatusHistory}
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-          >
-            이력 새로고침
-          </button>
-          <div className="text-sm text-gray-500">
-            최근 10개 기록 표시
-          </div>
-        </div>
       </div>
 
       {/* 시스템 정보 */}
@@ -218,7 +405,20 @@ export default function Home() {
           <li>• 차량 이동 중에는 1초마다 GPS 위치가 업데이트됩니다</li>
           <li>• 차량 정지 시 자동으로 데이터 전송이 중단됩니다</li>
           <li>• 실시간 데이터는 5초마다 자동으로 새로고침됩니다</li>
+          <li>• 디바이스별로 실시간 통합 표시되어 중복 레이블이 제거됩니다</li>
         </ul>
+      </div>
+
+      {/* 디버그 정보 (타임스탬프 확인용) */}
+      <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
+        <h3 className="text-lg font-medium text-yellow-800 mb-2">🔧 디버그 정보</h3>
+        <div className="text-sm text-yellow-700 space-y-1">
+          <p>• 현재 로컬 시간: {new Date().toLocaleString()}</p>
+          <p>• 현재 ISO 시간: {new Date().toISOString()}</p>
+          {currentStatus && (
+            <p>• 마지막 수신 타임스탬프: {currentStatus.timestamp}</p>
+          )}
+        </div>
       </div>
     </main>
   );

@@ -15,7 +15,6 @@
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
 
-
     <!-- Android 10+ 백그라운드 위치 접근 -->
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
 
@@ -24,7 +23,6 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-
 
     <!-- 자동 시작 권한 (빅스비 루틴용) -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -73,26 +71,19 @@
             </intent-filter>
         </activity>
 
-        <!-- 블루투스 연결 감지 서비스 -->
-        <service
-            android:name=".service.BluetoothMonitorService"
-            android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="location" />
-
         <!-- 블루투스 GPS 추적 서비스 -->
         <service
             android:name=".BluetoothGpsService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="location" />
-
-        <!-- 차량 데이터 수집 서비스 -->
-        <service
-            android:name=".service.VehicleDataService"
-            android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="location" />
+            android:foregroundServiceType="location">
+            <!-- 새로운 액션들 추가 -->
+            <intent-filter>
+                <action android:name="com.example.vehicletracker.ACTION_VEHICLE_BLUETOOTH_CONNECTED" />
+                <action android:name="com.example.vehicletracker.ACTION_VEHICLE_BLUETOOTH_DISCONNECTED" />
+                <action android:name="com.example.vehicletracker.ACTION_BLUETOOTH_TURNED_OFF" />
+            </intent-filter>
+        </service>
 
         <!-- 블루투스 상태 변경 리시버 -->
         <receiver
