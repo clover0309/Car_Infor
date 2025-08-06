@@ -8,7 +8,7 @@ data class VehicleStatus(
     val deviceId: String,
     val bluetoothDevice: String,
     val engineStatus: String,
-    val speed : Double,
+    val speed : Int,
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "Asia/Seoul")
     val timestamp: LocalDateTime = LocalDateTime.now(),
     val location: VehicleLocation? = null

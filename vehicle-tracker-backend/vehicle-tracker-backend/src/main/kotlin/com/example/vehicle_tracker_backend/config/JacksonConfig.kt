@@ -25,9 +25,10 @@ class JacksonConfig {
         // JavaTime 모듈 등록
         val javaTimeModule = JavaTimeModule()
         
-        // LocalDateTime 커스텀 직렬화기 등록 (KST 타임존 적용)
+        // LocalDateTime 커스텀 직렬화/역직렬화기 등록 (KST 타임존 적용)
         val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
         javaTimeModule.addSerializer(LocalDateTime::class.java, LocalDateTimeSerializer(formatter))
+        javaTimeModule.addDeserializer(LocalDateTime::class.java, CustomLocalDateTimeDeserializer())
         
         mapper.registerModule(javaTimeModule)
         mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)

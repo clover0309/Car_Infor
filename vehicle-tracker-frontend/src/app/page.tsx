@@ -38,18 +38,26 @@ export default function Home() {
     const status = await vehicleApi.getCurrentStatus();
     console.log('Received status:', status); // 디버깅용
     console.log('Timestamp format:', status?.timestamp); // timestamp 형식 확인
-    setCurrentStatus(status);
+    if (status && status.bluetoothDevice !== 'Unknown Device') {
+      setCurrentStatus(status);
+    } else {
+      setCurrentStatus(null);
+    }
   };
 
   // 상태 이력 조회 및 디바이스 추적 정보 업데이트
     const fetchStatusHistory = async () => {
       const history = await vehicleApi.getStatusHistory();
-      console.log('Received history:', history); // 디버깅용
-      if (history.length > 0) {
-          console.log('First history timestamp:', history[0].timestamp); // 형식 확인
-      }
-      setStatusHistory(history);
-      updateDeviceTracking(history);
+    // Unknown Device 제외
+    const filteredHistory = history.filter(
+      (status) => status.bluetoothDevice !== 'Unknown Device'
+    );
+    console.log('Received history:', filteredHistory); // 디버깅용
+    if (filteredHistory.length > 0) {
+        console.log('First history timestamp:', filteredHistory[0].timestamp); // 형식 확인
+    }
+    setStatusHistory(filteredHistory);
+    updateDeviceTracking(filteredHistory);
   };
 
   // 디바이스별 추적 정보 업데이트 함수
@@ -305,7 +313,9 @@ export default function Home() {
         <h2 className="text-xl font-semibold mb-4">🚗 디바이스별 실시간 추적 현황</h2>
         {deviceTracking.size > 0 ? (
           <div className="space-y-4">
-            {Array.from(deviceTracking.entries()).map(([deviceKey, info]) => (
+            {Array.from(deviceTracking.entries())
+  .filter(([_, info]) => info.bluetoothDevice !== 'Unknown Device')
+  .map(([deviceKey, info]) => (
               <div key={deviceKey} className="border rounded-lg p-4">
                 <div className="flex justify-between items-start mb-3">
                   <div className="flex items-center space-x-3">
@@ -383,31 +393,42 @@ export default function Home() {
         <h2 className="text-xl font-semibold mb-4">📊 상세 이동 기록</h2>
         {statusHistory.length > 0 ? (
           <div className="space-y-2 max-h-60 overflow-y-auto">
-            {statusHistory.slice().reverse().slice(0, 20).map((status, index) => (
-              <div key={index} className="border-b pb-2">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center space-x-2">
-                    <span className="text-sm font-medium">{status.bluetoothDevice}</span>
-                    <span className={`px-2 py-1 rounded text-white text-xs ${
-                      status.engineStatus === 'ON' ? 'bg-green-500' : 'bg-red-500'
-                    }`}>
-                      {status.engineStatus}
-                    </span>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm font-mono">{status.speed} km/h</div>
-                    <div className="text-xs text-gray-500">
-                      {formatTimeOnly(status.timestamp)}
-                    </div>
-                  </div>
-                </div>
-                {status.location && (
-                  <div className="text-xs text-gray-600 mt-1 font-mono">
-                    📍 {status.location.latitude.toFixed(4)}, {status.location.longitude.toFixed(4)}
-                  </div>
-                )}
-              </div>
-            ))}
+            {/* bluetoothDevice가 'Unknown Device'가 아닌, deviceId-bluetoothDevice 조합별 최신 1개만 표시 */}
+{(() => {
+  const uniqueHistoryMap = new Map();
+  statusHistory.slice().reverse().forEach(status => {
+    const key = `${status.deviceId}-${status.bluetoothDevice}`;
+    if (status.bluetoothDevice !== 'Unknown Device' && !uniqueHistoryMap.has(key)) {
+      uniqueHistoryMap.set(key, status);
+    }
+  });
+  const uniqueHistory = Array.from(uniqueHistoryMap.values());
+  return uniqueHistory.map((status, index) => (
+    <div key={index} className="border-b pb-2">
+      <div className="flex justify-between items-center">
+        <div className="flex items-center space-x-2">
+          <span className="text-sm font-medium">{status.bluetoothDevice}</span>
+          <span className={`px-2 py-1 rounded text-white text-xs ${
+            status.engineStatus === 'ON' ? 'bg-green-500' : 'bg-red-500'
+          }`}>
+            {status.engineStatus}
+          </span>
+        </div>
+        <div className="text-right">
+          <div className="text-sm font-mono">{status.speed} km/h</div>
+          <div className="text-xs text-gray-500">
+            {formatTimeOnly(status.timestamp)}
+          </div>
+        </div>
+      </div>
+      {status.location && (
+        <div className="text-xs text-gray-600 mt-1 font-mono">
+          📍 {status.location.latitude.toFixed(4)}, {status.location.longitude.toFixed(4)}
+        </div>
+      )}
+    </div>
+  ));
+})()}
           </div>
         ) : (
           <div className="text-center py-8">

@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.*
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import kotlin.math.floor
 
 @RestController
 @RequestMapping("/api/vehicle")
@@ -29,7 +30,7 @@ class VehicleController {
         val deviceId: String,
         val bluetoothDevice: String,
         val engineStatus: String,
-        val speed: Double,
+        val speed: Int, // 입력도 Int로 받음
         val timestamp: LocalDateTime,  // LocalDateTime으로 받음
         val location: VehicleLocation? = null
     )
@@ -77,7 +78,7 @@ class VehicleController {
                   "deviceId": "test-device-001",
                   "bluetoothDevice": "Car Audio XYZ", 
                   "engineStatus": "ON",
-                  "speed": 45.5,
+                  "speed": 45,
                   "location": {
                     "latitude": 37.5665,
                     "longitude": 126.9780

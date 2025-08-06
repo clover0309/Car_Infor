@@ -27,7 +27,7 @@ export default function RootLayout({
       <head>
         <script
           type="text/javascript"
-          src="//dapi.kakao.com/v2/maps/sdk.js?appkey=여기에 api키를 입력하세요."
+          src="//dapi.kakao.com/v2/maps/sdk.js?appkey=f2c638cc3d386a21f14461f6983d088b"
         ></script>
       </head>
       <body
