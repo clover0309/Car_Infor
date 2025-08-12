@@ -1,7 +1,7 @@
-package com.example.vehicle_tracker_backend.Service
+package com.example.vehicle_tracker_backend.service
 
-import com.example.vehicle_tracker_backend.Model.DeviceInfoEntity
-import com.example.vehicle_tracker_backend.Repository.DeviceInfoRepository
+import com.example.vehicle_tracker_backend.model.DeviceInfoEntity
+import com.example.vehicle_tracker_backend.repository.DeviceInfoRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -16,15 +16,21 @@ class DeviceInfoService(
         deviceInfoRepository.findByDeviceId(deviceId)
 
     @Transactional
-    fun registerDevice(deviceId: String, deviceName: String): DeviceInfoEntity =
-        deviceInfoRepository.save(DeviceInfoEntity(deviceId, deviceName))
+    fun registerDevice(deviceId: String, deviceName: String): Pair<DeviceInfoEntity, Boolean> {
+        val existingDevice = findByDeviceId(deviceId)
+        if (existingDevice != null) {
+            return Pair(existingDevice, false) // 기존 기기, isNew = false
+        }
+        val newDevice = deviceInfoRepository.save(DeviceInfoEntity(deviceId = deviceId, deviceName = deviceName))
+        return Pair(newDevice, true) // 새 기기, isNew = true
+    }
 
     @Transactional
     fun updateDeviceName(deviceId: String, deviceName: String): DeviceInfoEntity? {
         val device = deviceInfoRepository.findByDeviceId(deviceId)
-        device?.let {
-            it.deviceName = deviceName
-            return deviceInfoRepository.save(it)
+        if (device != null) {
+            device.deviceName = deviceName
+            return deviceInfoRepository.save(device)
         }
         return null
     }

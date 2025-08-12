@@ -44,6 +44,28 @@ class ApiService {
         }
     }
 
+    suspend fun getLatestVehicleStatus(): String? {
+        return withContext(Dispatchers.IO) {
+            try {
+                val url = URL("$BASE_URL/current") // 최신 상태를 가져오는 엔드포인트
+                val connection = url.openConnection() as HttpURLConnection
+                connection.requestMethod = "GET"
+                connection.connect()
+
+                if (connection.responseCode == HttpURLConnection.HTTP_OK) {
+                    // 성공적으로 데이터를 받아왔을 때
+                    connection.inputStream.bufferedReader().use { it.readText() }
+                } else {
+                    // 실패했을 때
+                    null
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error fetching latest status: ${e.message}")
+                null
+            }
+        }
+    }
+
     // 테스트 데이터 전송
     suspend fun sendTestData(): Boolean {
         return withContext(Dispatchers.IO) {

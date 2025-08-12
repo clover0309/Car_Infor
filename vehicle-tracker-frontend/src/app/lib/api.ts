@@ -67,13 +67,8 @@ export const vehicleApi = {
             }
 
             const data = await response.json();
-
-            // 백엔드에서 반환하는 새로운 형식 처리
-            if (data.hasData && data.status) {
-                return data.status;
-            }
-
-            return null;
+            // 백엔드가 VehicleStatus를 직접 반환하므로 바로 data를 반환
+            return data;
         } catch (error) {
             console.error('Error fetching current status:', error);
             return null;

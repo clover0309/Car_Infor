@@ -35,7 +35,8 @@ import retrofit2.Callback
 import retrofit2.Response
 
 class MainActivity : AppCompatActivity() {
-
+    
+    private val apiService = ApiService()
     private val mainScope = CoroutineScope(Dispatchers.Main)
 
     private lateinit var webView: WebView
@@ -62,6 +63,8 @@ class MainActivity : AppCompatActivity() {
         webView.postDelayed({
             loadWebPage()
         }, 5000)
+
+        startPollingVehicleStatus()
     }
 
     private fun startBluetoothGpsServiceIfPermitted() {
@@ -220,6 +223,34 @@ class MainActivity : AppCompatActivity() {
         runOnUiThread {
             statusText.text = message
             Log.d("StatusUpdate", message)
+        }
+    }
+
+    private fun startPollingVehicleStatus() {
+        mainScope.launch {
+            while (true) {
+                try {
+                    val jsonResponse = withContext(Dispatchers.IO) {
+                        apiService.getLatestVehicleStatus()
+                    }
+
+                    if (jsonResponse != null) {
+                        // JSON 파싱
+                        val jsonObject = org.json.JSONObject(jsonResponse)
+                        val engineStatus = jsonObject.getString("engineStatus")
+                        val speed = jsonObject.getInt("speed")
+                        val timestamp = jsonObject.getString("timestamp") // 타임스탬프는 일단 문자열로 받음
+
+                        val statusMessage = "엔진: $engineStatus, 속도: ${speed}km/h (업데이트: $timestamp)"
+                        updateStatus(statusMessage)
+                    } else {
+                        // updateStatus("최신 상태를 가져오지 못했습니다.") // 실패 메시지를 계속 표시하지 않으려면 주석 처리
+                    }
+                } catch (e: Exception) {
+                    Log.e("PollingError", "차량 상태 업데이트 중 오류", e)
+                }
+                kotlinx.coroutines.delay(5000) // 5초마다 반복
+            }
         }
     }
 

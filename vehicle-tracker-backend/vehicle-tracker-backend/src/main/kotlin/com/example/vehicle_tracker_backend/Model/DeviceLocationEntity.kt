@@ -1,34 +1,27 @@
-package com.example.vehicle_tracker_backend.Model
+package com.example.vehicle_tracker_backend.model
 
-import jakarta.persistence.*
+import jakarta.persistence.Column
+import jakarta.persistence.Entity
+import jakarta.persistence.Id
+import jakarta.persistence.Table
 import java.time.LocalDateTime
-import com.fasterxml.jackson.annotation.JsonFormat
-import java.text.SimpleDateFormat
-import java.util.*
 
 @Entity
 @Table(name = "device_location")
 data class DeviceLocationEntity(
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    val id: Long = 0,
-
-    @Column(name = "device_id", nullable = false)
-    val deviceId: String,
+    @Column(name = "device_id")
+    val deviceId: String = "",
 
     @Column(name = "device_name", nullable = false)
-    val deviceName: String,
+    val deviceName: String = "",
 
     @Column(nullable = false)
-    val latitude: Double,
+    val latitude: Double = 0.0,
 
     @Column(nullable = false)
-    val longitude: Double,
+    val longitude: Double = 0.0,
 
     @Column(nullable = false)
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss", timezone = "Asia/Seoul")
-    val timestamp: LocalDateTime = LocalDateTime.now(),
-
-    @Column(nullable = false)
-    val speed: Int = 0
+    val timestamp: LocalDateTime = LocalDateTime.now()
 )

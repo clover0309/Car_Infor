@@ -10,6 +10,11 @@ import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Primary
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import com.fasterxml.jackson.core.JsonParser
+import com.fasterxml.jackson.databind.DeserializationContext
+import com.fasterxml.jackson.databind.JsonDeserializer
+
+
 
 @Configuration
 class JacksonConfig {
@@ -28,7 +33,11 @@ class JacksonConfig {
         // LocalDateTime 커스텀 직렬화/역직렬화기 등록 (KST 타임존 적용)
         val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
         javaTimeModule.addSerializer(LocalDateTime::class.java, LocalDateTimeSerializer(formatter))
-        javaTimeModule.addDeserializer(LocalDateTime::class.java, CustomLocalDateTimeDeserializer())
+        javaTimeModule.addDeserializer(LocalDateTime::class.java, object : com.fasterxml.jackson.databind.JsonDeserializer<LocalDateTime>() {
+            override fun deserialize(p: com.fasterxml.jackson.core.JsonParser?, ctxt: com.fasterxml.jackson.databind.DeserializationContext?): LocalDateTime {
+                return LocalDateTime.parse(p?.text, formatter)
+            }
+        })
         
         mapper.registerModule(javaTimeModule)
         mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)

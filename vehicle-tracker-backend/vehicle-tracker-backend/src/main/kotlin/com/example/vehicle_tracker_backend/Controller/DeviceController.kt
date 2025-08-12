@@ -1,7 +1,7 @@
-package com.example.vehicle_tracker_backend.Controller
+package com.example.vehicle_tracker_backend.controller
 
-import com.example.vehicle_tracker_backend.Model.DeviceInfoEntity
-import com.example.vehicle_tracker_backend.Service.DeviceInfoService
+import com.example.vehicle_tracker_backend.model.DeviceInfoEntity
+import com.example.vehicle_tracker_backend.service.DeviceInfoService
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 
@@ -30,8 +30,14 @@ class DeviceController(
         ResponseEntity.ok(deviceInfoService.existsByDeviceId(deviceId))
 
     @PostMapping("/register")
-    fun register(@RequestBody req: DeviceRegisterRequest): ResponseEntity<DeviceInfoEntity> =
-        ResponseEntity.ok(deviceInfoService.registerDevice(req.deviceId, req.deviceName))
+    fun register(@RequestBody req: DeviceRegisterRequest): ResponseEntity<DeviceInfoEntity> {
+        val (device, isNew) = deviceInfoService.registerDevice(req.deviceId, req.deviceName)
+        return if (isNew) {
+            ResponseEntity.status(201).body(device)
+        } else {
+            ResponseEntity.ok(device)
+        }
+    }
 
     @PutMapping("/name")
     fun updateName(@RequestBody req: DeviceRegisterRequest): ResponseEntity<DeviceInfoEntity?> =
