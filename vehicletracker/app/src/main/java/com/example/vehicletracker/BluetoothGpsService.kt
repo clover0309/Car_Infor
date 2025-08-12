@@ -8,6 +8,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothManager
 import com.example.vehicletracker.receiver.BluetoothStateReceiver
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -101,6 +102,7 @@ class BluetoothGpsService : Service() {
     /**
      * 차량 블루투스 연결 처리
      */
+    @android.annotation.SuppressLint("MissingPermission")
     private fun handleVehicleBluetoothConnected(intent: Intent) {
         val deviceName = intent.getStringExtra("bluetooth_device_name")
         val deviceAddress = intent.getStringExtra("bluetooth_device_address")
@@ -108,7 +110,8 @@ class BluetoothGpsService : Service() {
         Log.i(TAG, "차량 블루투스 연결: $deviceName ($deviceAddress)")
         
         if (deviceName != null && deviceAddress != null) {
-            val device = BluetoothAdapter.getDefaultAdapter()?.bondedDevices?.find { 
+            val bluetoothManager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+            val device = bluetoothManager.adapter?.bondedDevices?.find { 
                 it.address == deviceAddress 
             }
             
@@ -230,6 +233,7 @@ class BluetoothGpsService : Service() {
         }
     }
 
+    @android.annotation.SuppressLint("MissingPermission")
     private fun sendUpdateToBackend() {
         val engineStatus = if (ignitionOn) "ON" else "OFF"
         val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())

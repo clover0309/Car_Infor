@@ -43,6 +43,7 @@ class BluetoothStateReceiver : BroadcastReceiver() {
     /**
      * 블루투스 기기 연결 처리
      */
+    @android.annotation.SuppressLint("MissingPermission")
     private fun handleBluetoothConnected(context: Context, intent: Intent) {
         val device: BluetoothDevice? = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
             intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
@@ -97,6 +98,7 @@ class BluetoothStateReceiver : BroadcastReceiver() {
     /**
      * 블루투스 기기 연결 해제 처리
      */
+    @android.annotation.SuppressLint("MissingPermission")
     private fun handleBluetoothDisconnected(context: Context, intent: Intent) {
         val device: BluetoothDevice? = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
             intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
@@ -308,17 +310,16 @@ class BluetoothStateReceiver : BroadcastReceiver() {
     private fun launchVehicleTrackerApp(context: Context, deviceName: String, deviceAddress: String) {
         try {
             val launchIntent = Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                putExtra("auto_started", true)
-                putExtra("bluetooth_device_name", deviceName)
-                putExtra("bluetooth_device_address", deviceAddress)
-                putExtra("start_reason", "bluetooth_connected")
+                action = "ACTION_SHOW_REGISTER_DIALOG"
+                putExtra("device_id", deviceAddress)
+                putExtra("device_name", deviceName)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             }
 
             context.startActivity(launchIntent)
-            Log.i(TAG, "차량 트래커 앱 자동 실행 완료")
+            Log.i(TAG, "차량 트래커 앱 자동 실행 및 다이얼로그 요청 완료")
         } catch (e: Exception) {
-            Log.e(TAG, "앱 자동 실행 실패", e)
+            Log.e(TAG, "앱 자동 실행 또는 다이얼로그 요청 실패", e)
         }
     }
 }

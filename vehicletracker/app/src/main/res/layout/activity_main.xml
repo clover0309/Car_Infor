@@ -17,10 +17,17 @@
         android:textSize="14sp" />
 
     <!-- WebView -->
+    <Button
+        android:id="@+id/registerDeviceButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="기기 등록" />
+
+    <!-- WebView -->
     <WebView
         android:id="@+id/webView"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_height="0dp"
         android:layout_weight="1" />
 
 </LinearLayout>

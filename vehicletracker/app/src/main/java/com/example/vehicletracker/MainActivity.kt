@@ -1,6 +1,6 @@
 package com.example.vehicletracker
 
-import android.app.Activity
+import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
 import android.webkit.WebView
@@ -10,6 +10,10 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceError
 import android.webkit.ConsoleMessage
 import android.widget.TextView
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import android.widget.Toast
 import android.view.KeyEvent
 import android.Manifest
@@ -18,30 +22,43 @@ import android.content.Intent
 import android.os.Build
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import android.widget.Button
+import android.widget.EditText
+import androidx.appcompat.app.AlertDialog
+import com.example.vehicletracker.R
+import com.example.vehicletracker.BuildConfig
+import com.example.vehicletracker.api.DeviceInfoEntity
+import com.example.vehicletracker.api.DeviceRegisterRequest
+import com.example.vehicletracker.api.RetrofitInstance
+import retrofit2.Call
+import retrofit2.Callback
+import retrofit2.Response
 
-class MainActivity : Activity() {
+class MainActivity : AppCompatActivity() {
+
+    private val mainScope = CoroutineScope(Dispatchers.Main)
 
     private lateinit var webView: WebView
     private lateinit var statusText: TextView
+    private lateinit var registerDeviceButton: Button
     private var backPressTime: Long = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // 권한 체크 및 서비스 시작
         startBluetoothGpsServiceIfPermitted()
 
-        // UI 요소 초기화 (WebView, statusText 등)
         initViews()
 
-        // WebView 설정
         setupWebView()
 
-        // 테스트: 간단한 메시지 표시
-        updateStatus("앱이 정상적으로 시작되었습니다 ✓")
+        registerDeviceButton.setOnClickListener {
+            showRegisterDeviceDialog()
+        }
 
-        // 5초 후 웹페이지 로드 시도
+        updateStatus("앱이 정상적으로 시작되었습니다 ")
+
         webView.postDelayed({
             loadWebPage()
         }, 5000)
@@ -65,7 +82,6 @@ class MainActivity : Activity() {
         }
         
         if (notGranted.isEmpty()) {
-            // 모든 권한이 허용된 경우에만 서비스 시작
             val serviceIntent = Intent(this, BluetoothGpsService::class.java)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 startForegroundService(serviceIntent)
@@ -84,7 +100,6 @@ class MainActivity : Activity() {
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == 101) {
-            // 모든 권한이 허용됐는지 다시 체크
             startBluetoothGpsServiceIfPermitted()
         }
     }
@@ -92,43 +107,51 @@ class MainActivity : Activity() {
     private fun initViews() {
         webView = findViewById(R.id.webView)
         statusText = findViewById(R.id.statusText)
+        registerDeviceButton = findViewById(R.id.registerDeviceButton)
     }
 
     private fun setupWebView() {
-        // WebView 기본 설정
-        webView.settings.apply {
-            // JavaScript 활성화 (필수)
-            javaScriptEnabled = true
+        webView.settings.javaScriptEnabled = true
+        webView.settings.domStorageEnabled = true
 
-            // DOM Storage 활성화
-            domStorageEnabled = true
-
-            // 파일 접근 허용
-            allowContentAccess = true
-            allowFileAccess = true
-
-            // 줌 기능
-            setSupportZoom(true)
-            builtInZoomControls = true
-            displayZoomControls = false // 줌 버튼 숨기기
-
-            // 뷰포트 설정
-            useWideViewPort = true
-            loadWithOverviewMode = true
-        }
-
-        // WebViewClient 설정 (페이지 로딩 이벤트 처리)
         webView.webViewClient = object : WebViewClient() {
+            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                val url = request?.url.toString()
+                // 앱의 기본 URL(WEB_URL)과 같은 도메인인지 확인합니다.
+                val baseUrl = BuildConfig.WEB_URL
+                if (url.startsWith(baseUrl)) {
+                    // 같은 도메인이면 WebView가 직접 로드하도록 false를 반환합니다.
+                    return false
+                }
+
+                // 외부 링크(http, https)를 외부 브라우저에서 열도록 처리합니다.
+                if (url.startsWith("http://") || url.startsWith("https://")) {
+                    try {
+                        val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                        startActivity(intent)
+                        return true
+                    } catch (e: Exception) {
+                        return true // 예외 발생 시 아무것도 하지 않음
+                    }
+                }
+                // 그 외의 스킴(tel:, mailto: 등)도 외부 앱으로 처리합니다.
+                return try {
+                    val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                    startActivity(intent)
+                    true
+                } catch (e: Exception) {
+                    true
+                }
+            }
+
             override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                 super.onPageStarted(view, url, favicon)
-                Log.d("WebView", "페이지 로딩 시작: $url")
-                updateStatus("웹페이지 로딩 중...")
+                updateStatus("페이지 로딩 중...")
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-                Log.d("WebView", "페이지 로딩 완료: $url")
-                updateStatus("웹페이지 로드 완료 ✓")
+                updateStatus("페이지 로딩 완료.")
             }
 
             override fun onReceivedError(
@@ -137,143 +160,71 @@ class MainActivity : Activity() {
                 error: WebResourceError?
             ) {
                 super.onReceivedError(view, request, error)
-                Log.e("WebView", "페이지 로딩 오류: ${error?.description}")
-                updateStatus("웹페이지 로드 실패 ✗")
-
-                // 사용자에게 오류 메시지 표시
-                Toast.makeText(
-                    this@MainActivity,
-                    "웹페이지를 불러올 수 없습니다. 네트워크를 확인해주세요.",
-                    Toast.LENGTH_LONG
-                ).show()
+                if (request?.isForMainFrame == true) {
+                    Log.e("WebViewError", "URL: ${request.url}, Error: ${error?.errorCode}, ${error?.description}")
+                    loadFallbackPage()
+                }
             }
         }
 
-        // WebChromeClient 설정 (JavaScript 콘솔 로그 등)
         webView.webChromeClient = object : WebChromeClient() {
             override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
-                Log.d("WebView-Console", "${consoleMessage?.message()} -- From line ${consoleMessage?.lineNumber()} of ${consoleMessage?.sourceId()}")
+                Log.d("WebViewConsole", "${consoleMessage?.message()} -- From line ${consoleMessage?.lineNumber()} of ${consoleMessage?.sourceId()}")
                 return true
             }
-
             override fun onProgressChanged(view: WebView?, newProgress: Int) {
                 super.onProgressChanged(view, newProgress)
-                updateStatus("로딩 중... ($newProgress%)")
             }
         }
     }
 
-    // 하드웨어 뒤로가기 버튼 처리
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (keyCode == KeyEvent.KEYCODE_BACK && event?.action == KeyEvent.ACTION_DOWN) {
-            if (::webView.isInitialized && webView.canGoBack()) {
-                webView.goBack()
-                Log.d("BackPress", "WebView 뒤로가기 실행")
-                return true
+        if (keyCode == KeyEvent.KEYCODE_BACK && webView.canGoBack()) {
+            webView.goBack()
+            return true
+        }
+        
+        if (keyCode == KeyEvent.KEYCODE_BACK) {
+            if (System.currentTimeMillis() - backPressTime < 2000) {
+                finish()
             } else {
-                // 앱 종료 확인
-                val currentTime = System.currentTimeMillis()
-
-                if (currentTime - backPressTime < 2000) {
-                    // 2초 이내에 다시 눌렀다면 앱 종료
-                    finish()
-                    return true
-                } else {
-                    // 첫 번째 뒤로가기 버튼 클릭
-                    backPressTime = currentTime
-                    Toast.makeText(this, "한 번 더 누르면 앱이 종료됩니다.", Toast.LENGTH_SHORT).show()
-                    return true
-                }
+                backPressTime = System.currentTimeMillis()
+                Toast.makeText(this, "한 번 더 누르면 종료됩니다.", Toast.LENGTH_SHORT).show()
             }
+            return true
         }
         return super.onKeyDown(keyCode, event)
     }
 
     private fun loadWebPage() {
-        try {
-            // 웹페이지 URL 설정
-            val webUrl = getWebPageUrl()
-
-            Log.d("WebView", "웹페이지 로딩 시도: $webUrl")
-            updateStatus("연결 중...")
-
-            // 웹페이지 로드
-            webView.loadUrl(webUrl)
-        } catch (e: Exception) {
-            Log.e("WebView", "웹페이지 로딩 중 오류", e)
-            updateStatus("로딩 오류 발생")
-
-            // 간단한 HTML 페이지 로드 (fallback)
+        val url = BuildConfig.WEB_URL
+        if (url.isNotEmpty()) {
+            Log.d("MainActivity", "웹 페이지 로딩: $url")
+            webView.loadUrl(url)
+        } else {
+            Log.e("MainActivity", "웹 페이지 URL을 찾을 수 없습니다.")
             loadFallbackPage()
         }
     }
 
     private fun loadFallbackPage() {
-        val htmlContent = """
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Vehicle Tracker</title>
-                <style>
-                    body { 
-                        font-family: Arial, sans-serif; 
-                        text-align: center; 
-                        padding: 50px;
-                        background-color: #f5f5f5;
-                    }
-                    .container {
-                        background: white;
-                        padding: 30px;
-                        border-radius: 10px;
-                        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                    }
-                    .status { color: #ff6b6b; margin: 20px 0; }
-                    .info { color: #666; font-size: 14px; line-height: 1.5; }
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <h1>🚗 Vehicle Tracker</h1>
-                    <div class="status">서버에 연결할 수 없습니다</div>
-                    <div class="info">
-                        확인사항:<br>
-                        • Spring Boot 서버 실행 상태 (포트 8080)<br>
-                        • NextJS 서버 실행 상태 (포트 3000)<br>
-                        • 네트워크 연결 상태
-                    </div>
-                </div>
-            </body>
-            </html>
-        """.trimIndent()
-
-        webView.loadDataWithBaseURL(null, htmlContent, "text/html", "UTF-8", null)
-        updateStatus("오프라인 모드")
-    }
-
-    private fun getWebPageUrl(): String {
-        // 강제 URL 설정 (에뮬레이터용)
-        val url = "http://192.168.1.219:3000"
-
-        Log.d("WebView", "=== URL 설정 ===")
-        Log.d("WebView", "사용할 URL: $url")
-        Log.d("WebView", "=================")
-
-        return url
+        try {
+            webView.loadUrl("file:///android_asset/index.html")
+        } catch (e: Exception) {
+            Log.e("FallbackLoad", "대체 페이지 로딩 실패", e)
+            updateStatus("모든 페이지 로딩에 실패했습니다. 네트워크 연결을 확인해주세요.")
+        }
     }
 
     private fun updateStatus(message: String) {
         runOnUiThread {
-            if (::statusText.isInitialized) {
-                statusText.text = message
-            }
+            statusText.text = message
+            Log.d("StatusUpdate", message)
         }
     }
 
     override fun onDestroy() {
         try {
-            // WebView 정리
             if (::webView.isInitialized) {
                 webView.destroy()
             }
@@ -282,5 +233,90 @@ class MainActivity : Activity() {
         }
 
         super.onDestroy()
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        if (intent?.action == "ACTION_SHOW_REGISTER_DIALOG") {
+            val deviceId = intent.getStringExtra("device_id")
+            val deviceName = intent.getStringExtra("device_name")
+            if (deviceId != null) {
+                mainScope.launch {
+                    try {
+                        val response = withContext(Dispatchers.IO) {
+                            RetrofitInstance.api.checkDeviceExists(deviceId)
+                        }
+                        if (response.isSuccessful) {
+                            val exists = response.body() ?: false
+                            if (exists) {
+                                Toast.makeText(this@MainActivity, "이미 등록된 기기입니다.", Toast.LENGTH_SHORT).show()
+                            } else {
+                                showRegisterDeviceDialog(deviceId, deviceName)
+                            }
+                        } else {
+                            Toast.makeText(this@MainActivity, "기기 확인에 실패했습니다: ${response.code()}", Toast.LENGTH_SHORT).show()
+                        }
+                    } catch (e: Exception) {
+                        Log.e("MainActivity", "기기 확인 중 오류 발생", e)
+                        Toast.makeText(this@MainActivity, "오류가 발생했습니다: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+    }
+
+    private fun showRegisterDeviceDialog(deviceId: String? = null, deviceName: String? = null) {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_register_device, null)
+        val deviceIdTextView = dialogView.findViewById<TextView>(R.id.deviceIdTextView)
+        val deviceNameEditText = dialogView.findViewById<EditText>(R.id.deviceNameEditText)
+
+        if (deviceId != null) {
+            deviceIdTextView.text = deviceId
+            deviceNameEditText.setText(deviceName)
+        }
+
+        val dialog = AlertDialog.Builder(this)
+            .setView(dialogView)
+            .setPositiveButton("등록", null)
+            .setNegativeButton("취소", null)
+            .create()
+
+        dialog.setOnShowListener {
+            val positiveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            positiveButton.setOnClickListener {
+                val newDeviceId = deviceIdTextView.text.toString().trim()
+                val newDeviceName = deviceNameEditText.text.toString().trim()
+
+                if (newDeviceName.isEmpty()) {
+                    Toast.makeText(this, "기기 이름을 입력해주세요.", Toast.LENGTH_SHORT).show()
+                } else {
+                    registerDevice(newDeviceId, newDeviceName)
+                    dialog.dismiss()
+                }
+            }
+        }
+        dialog.show()
+    }
+
+    private fun registerDevice(deviceId: String, deviceName: String) {
+        val request = DeviceRegisterRequest(deviceId = deviceId, deviceName = deviceName)
+        RetrofitInstance.api.registerDevice(request).enqueue(object : Callback<DeviceInfoEntity> {
+            override fun onResponse(call: Call<DeviceInfoEntity>, response: Response<DeviceInfoEntity>) {
+                if (response.isSuccessful) {
+                    val registeredDevice = response.body()
+                    Log.d("ApiService", "기기 등록 성공: $registeredDevice")
+                    Toast.makeText(this@MainActivity, "'${registeredDevice?.deviceName}' 기기가 등록되었습니다.", Toast.LENGTH_SHORT).show()
+                } else {
+                    val errorBody = response.errorBody()?.string()
+                    Log.e("ApiService", "기기 등록 실패: $errorBody")
+                    Toast.makeText(this@MainActivity, "기기 등록 실패: $errorBody", Toast.LENGTH_LONG).show()
+                }
+            }
+
+            override fun onFailure(call: Call<DeviceInfoEntity>, t: Throwable) {
+                Log.e("ApiService", "네트워크 오류", t)
+                Toast.makeText(this@MainActivity, "네트워크 오류가 발생했습니다.", Toast.LENGTH_SHORT).show()
+            }
+        })
     }
 }

@@ -27,6 +27,9 @@
     <!-- 자동 시작 권한 (빅스비 루틴용) -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!-- Android 13+ 알림 권한 -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
     <!-- 블루투스 기능 필요 -->
     <uses-feature
         android:name="android.hardware.bluetooth"

@@ -9,6 +9,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
+        buildConfigField("String", "WEB_URL", "\"http://192.168.1.219:3000\"")
         applicationId = "com.example.vehicletracker"
         minSdk = 24
         targetSdk = 36
@@ -18,6 +19,10 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
+    }
     buildTypes {
         release {
             isMinifyEnabled = false

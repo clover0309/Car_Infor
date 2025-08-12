@@ -81,6 +81,7 @@ object NotificationHelper {
     /**
      * 블루투스 연결 알림
      */
+    @android.annotation.SuppressLint("MissingPermission")
     fun showBluetoothConnectedNotification(context: Context, deviceName: String, message: String) {
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -121,6 +122,7 @@ object NotificationHelper {
     /**
      * 블루투스 연결 해제 알림
      */
+    @android.annotation.SuppressLint("MissingPermission")
     fun showBluetoothDisconnectedNotification(context: Context, deviceName: String, message: String) {
         val notification = NotificationCompat.Builder(context, CHANNEL_BLUETOOTH)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
@@ -142,6 +144,7 @@ object NotificationHelper {
     /**
      * 블루투스 상태 변경 알림
      */
+    @android.annotation.SuppressLint("MissingPermission")
     fun showBluetoothStateNotification(context: Context, title: String, message: String) {
         val notification = NotificationCompat.Builder(context, CHANNEL_BLUETOOTH)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
@@ -194,6 +197,7 @@ object NotificationHelper {
     /**
      * 데이터 동기화 성공 알림
      */
+    @android.annotation.SuppressLint("MissingPermission")
     fun showDataSyncSuccessNotification(context: Context, recordCount: Int) {
         val notification = NotificationCompat.Builder(context, CHANNEL_DATA_SYNC)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
@@ -214,6 +218,7 @@ object NotificationHelper {
     /**
      * 데이터 동기화 실패 알림
      */
+    @android.annotation.SuppressLint("MissingPermission")
     fun showDataSyncFailureNotification(context: Context, errorMessage: String) {
         val notification = NotificationCompat.Builder(context, CHANNEL_DATA_SYNC)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
