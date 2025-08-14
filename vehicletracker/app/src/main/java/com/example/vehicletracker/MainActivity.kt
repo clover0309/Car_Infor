@@ -43,6 +43,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var statusText: TextView
     private lateinit var registerDeviceButton: Button
     private var backPressTime: Long = 0
+    
+    // 기기 등록 모달창이 표시되고 있는지 확인하는 플래그
+    private var isRegisterDialogShowing = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -256,6 +259,9 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         try {
+            // 앱 종료 시 시동 OFF 상태 전송
+            sendEngineOffStatus()
+            
             if (::webView.isInitialized) {
                 webView.destroy()
             }
@@ -264,6 +270,47 @@ class MainActivity : AppCompatActivity() {
         }
 
         super.onDestroy()
+    }
+    
+    /**
+     * 앱 종료 시 엔진 OFF 상태를 서버에 전송
+     */
+    private fun sendEngineOffStatus() {
+        Log.i("MainActivity", "[시동 OFF 감지] 앱 종료로 인한 엔진 OFF 상태 전송 시도")
+        Thread {
+            try {
+                val deviceId = android.provider.Settings.Secure.getString(
+                    contentResolver, 
+                    android.provider.Settings.Secure.ANDROID_ID
+                )
+                
+                val timestamp = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+                
+                // SharedPreferences에서 마지막으로 연결된 기기 정보 가져오기
+                val prefs = getSharedPreferences("VehicleTrackerPrefs", android.content.Context.MODE_PRIVATE)
+                val lastDeviceName = prefs.getString("last_connected_device_name", "Unknown Device")
+                
+                val dto = com.example.vehicletracker.api.VehicleStatusDto(
+                    deviceId = deviceId,
+                    bluetoothDevice = lastDeviceName ?: "Unknown Device",
+                    engineStatus = "OFF",
+                    speed = 0f,
+                    timestamp = timestamp,
+                    location = null // 앱 종료 시에는 위치 정보 없음
+                )
+                
+                Log.d("MainActivity", "[시동 OFF 감지] 전송할 데이터: $dto")
+                
+                val response = com.example.vehicletracker.api.RetrofitInstance.api.sendVehicleStatus(dto).execute()
+                if (response.isSuccessful) {
+                    Log.i("MainActivity", "[시동 OFF 감지] 앱 종료로 인한 엔진 OFF 상태 전송 성공: ${response.code()}, 기기: $lastDeviceName")
+                } else {
+                    Log.e("MainActivity", "[시동 OFF 감지] 앱 종료로 인한 엔진 OFF 상태 전송 실패: ${response.code()} ${response.errorBody()?.string()}, 기기: $lastDeviceName")
+                }
+            } catch (e: Exception) {
+                Log.e("MainActivity", "[시동 OFF 감지] 앱 종료로 인한 엔진 OFF 상태 전송 중 오류", e)
+            }
+        }.start()
     }
 
     override fun onNewIntent(intent: Intent?) {
@@ -297,6 +344,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showRegisterDeviceDialog(deviceId: String? = null, deviceName: String? = null) {
+        // 이미 모달창이 표시되고 있는 경우 중복 표시 방지
+        if (isRegisterDialogShowing) {
+            Log.d("MainActivity", "[기기 등록] 이미 모달창이 표시되고 있어 중복 표시를 방지합니다.")
+            return
+        }
+        
+        isRegisterDialogShowing = true
+        
         val dialogView = layoutInflater.inflate(R.layout.dialog_register_device, null)
         val deviceIdTextView = dialogView.findViewById<TextView>(R.id.deviceIdTextView)
         val deviceNameEditText = dialogView.findViewById<EditText>(R.id.deviceNameEditText)
@@ -311,6 +366,12 @@ class MainActivity : AppCompatActivity() {
             .setPositiveButton("등록", null)
             .setNegativeButton("취소", null)
             .create()
+            
+        // 다이얼로그가 닫혔을 때 플래그 초기화
+        dialog.setOnDismissListener {
+            isRegisterDialogShowing = false
+            Log.d("MainActivity", "[기기 등록] 모달창 닫힘, 플래그 초기화")
+        }
 
         dialog.setOnShowListener {
             val positiveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE)

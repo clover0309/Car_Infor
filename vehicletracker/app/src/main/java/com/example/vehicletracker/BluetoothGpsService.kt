@@ -88,13 +88,21 @@ class BluetoothGpsService : Service() {
     }
 
     override fun onDestroy() {
-        super.onDestroy()
         try {
+            // 서비스 종료 시 엔진 OFF 상태 전송
+            if (ignitionOn) {
+                Log.i(TAG, "[시동 OFF 감지] 서비스 종료로 인한 엔진 OFF 상태 전송, 기기: ${currentDeviceName ?: "Unknown"}")
+                ignitionOn = false
+                sendUpdateToBackend()
+            }
+            
             unregisterReceiver(bluetoothReceiver)
             fusedLocationClient.removeLocationUpdates(locationCallback)
         } catch (e: Exception) {
             Log.e(TAG, "onDestroy 중 오류", e)
         }
+        
+        super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

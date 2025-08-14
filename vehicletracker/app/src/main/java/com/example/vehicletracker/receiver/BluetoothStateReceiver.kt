@@ -21,6 +21,10 @@ class BluetoothStateReceiver : BroadcastReceiver() {
         private const val PREFS_NAME = "VehicleTrackerPrefs"
         private const val KEY_LAST_CONNECTED_DEVICE_NAME = "last_connected_device_name"
         private const val KEY_LAST_CONNECTED_DEVICE_ADDRESS = "last_connected_device_address"
+        private const val KEY_LAST_LAUNCH_TIME = "last_launch_time"
+        
+        // 인텐트 중복 방지를 위한 최소 시간 간격 (밀리초)
+        private const val MIN_LAUNCH_INTERVAL = 5000 // 5초
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -226,9 +230,9 @@ class BluetoothStateReceiver : BroadcastReceiver() {
                 
                 val response = RetrofitInstance.api.sendVehicleStatus(dto).execute()
                 if (response.isSuccessful) {
-                    Log.i(TAG, "엔진 OFF 상태 전송 성공: ${response.code()}")
+                    Log.i(TAG, "[시동 OFF 감지] 엔진 OFF 상태 전송 성공: ${response.code()}, 기기: $deviceName")
                 } else {
-                    Log.e(TAG, "엔진 OFF 상태 전송 실패: ${response.code()} ${response.errorBody()?.string()}")
+                    Log.e(TAG, "[시동 OFF 감지] 엔진 OFF 상태 전송 실패: ${response.code()} ${response.errorBody()?.string()}, 기기: $deviceName")
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "엔진 OFF 상태 전송 중 오류", e)
@@ -309,6 +313,20 @@ class BluetoothStateReceiver : BroadcastReceiver() {
      */
     private fun launchVehicleTrackerApp(context: Context, deviceName: String, deviceAddress: String) {
         try {
+            // 마지막 앱 실행 시간 확인
+            val sharedPrefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val lastLaunchTime = sharedPrefs.getLong(KEY_LAST_LAUNCH_TIME, 0)
+            val currentTime = System.currentTimeMillis()
+            
+            // 마지막 실행 후 최소 시간 간격이 지나지 않았으면 중복 실행 방지
+            if (currentTime - lastLaunchTime < MIN_LAUNCH_INTERVAL) {
+                Log.i(TAG, "앱 실행 요청이 너무 빈번함: ${(currentTime - lastLaunchTime)}ms 간격, 최소 ${MIN_LAUNCH_INTERVAL}ms 필요")
+                return
+            }
+            
+            // 현재 시간을 마지막 실행 시간으로 저장
+            sharedPrefs.edit().putLong(KEY_LAST_LAUNCH_TIME, currentTime).apply()
+            
             val launchIntent = Intent(context, MainActivity::class.java).apply {
                 action = "ACTION_SHOW_REGISTER_DIALOG"
                 putExtra("device_id", deviceAddress)

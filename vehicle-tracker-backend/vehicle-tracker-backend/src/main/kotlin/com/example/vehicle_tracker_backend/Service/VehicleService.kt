@@ -18,7 +18,21 @@ class VehicleService(
 ) {
 
         fun getDeviceInfoByDeviceName(deviceName: String): DeviceInfoEntity? {
-        return deviceInfoRepository.findByDeviceName(deviceName)
+        try {
+            // 중복 결과 처리: 가장 최근에 등록된 기기 정보 반환
+            val results = deviceInfoRepository.findAll()
+                .filter { it.deviceName == deviceName }
+                .sortedByDescending { it.idx }
+            
+            return if (results.isNotEmpty()) {
+                results.first() // 가장 최근에 등록된 기기 정보 반환
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            println("[기기 정보 조회 오류] 기기 이름: $deviceName, 오류: ${e.message}")
+            return null
+        }
     }
 
     @Transactional
@@ -27,14 +41,37 @@ class VehicleService(
 
         // 시동이 꺼졌을 때(OFF) 마지막 위치 정보 저장 또는 업데이트
         if (status.engineStatus == "OFF") {
-            val location = DeviceLocationEntity(
-                deviceId = status.deviceId,
-                deviceName = status.bluetoothDevice, // VehicleStatus의 bluetoothDevice를 사용
-                latitude = status.latitude ?: 0.0,
-                longitude = status.longitude ?: 0.0,
-                timestamp = status.timestamp
-            )
-            deviceLocationRepository.save(location) // UPSERT 동작 (같은 deviceId면 덮어쓰기)
+            try {
+                // 먼저 device_info 테이블에 해당 기기가 존재하는지 확인
+                var deviceInfo = deviceInfoRepository.findByDeviceId(status.deviceId)
+                
+                // 기기 ID는 존재하지만 이름이 다른 경우 업데이트
+                if (deviceInfo != null && deviceInfo.deviceName != status.bluetoothDevice) {
+                    deviceInfo.deviceName = status.bluetoothDevice
+                    deviceInfoRepository.save(deviceInfo)
+                } 
+                // 기기가 존재하지 않는 경우 새로 등록
+                else if (deviceInfo == null) {
+                    deviceInfo = DeviceInfoEntity(
+                        deviceId = status.deviceId,
+                        deviceName = status.bluetoothDevice
+                    )
+                    deviceInfoRepository.save(deviceInfo)
+                }
+                
+                // 위치 정보 저장
+                val location = DeviceLocationEntity(
+                    deviceId = status.deviceId,
+                    deviceName = status.bluetoothDevice,
+                    latitude = status.latitude ?: 0.0,
+                    longitude = status.longitude ?: 0.0,
+                    timestamp = status.timestamp
+                )
+                deviceLocationRepository.save(location)
+            } catch (e: Exception) {
+                // 오류 발생 시 로그 기록
+                println("[위치 저장 오류] 기기 ID: ${status.deviceId}, 기기 이름: ${status.bluetoothDevice}, 오류: ${e.message}")
+            }
         }
     }
 
