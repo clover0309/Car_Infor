@@ -47,7 +47,7 @@ console.log('🎯 최종 선택된 API_BASE_URL:', API_BASE_URL);
 
 export interface VehicleStatus {
     deviceId: string;
-    bluetoothDevice: string;
+    deviceName: string;
     engineStatus: string;
     speed: number;
     timestamp: string;

@@ -6,7 +6,7 @@ import KakaoMap from './components/KakaoMap';
 
 interface DeviceTrackingInfo {
   deviceId: string;
-  bluetoothDevice: string;
+  deviceName: string;
   isOnline: boolean;
   lastEngineStatus: string;
   lastSpeed: number;
@@ -38,7 +38,7 @@ export default function Home() {
     const status = await vehicleApi.getCurrentStatus();
     console.log('Received status:', status); // 디버깅용
     console.log('Timestamp format:', status?.timestamp); // timestamp 형식 확인
-    if (status && status.bluetoothDevice !== 'Unknown Device') {
+    if (status && status.deviceName !== 'Unknown Device') {
       setCurrentStatus(status);
     } else {
       setCurrentStatus(null);
@@ -50,7 +50,7 @@ export default function Home() {
       const history = await vehicleApi.getStatusHistory();
     // Unknown Device 제외
     const filteredHistory = history.filter(
-      (status) => status.bluetoothDevice !== 'Unknown Device'
+      (status) => status.deviceName !== 'Unknown Device'
     );
     console.log('Received history:', filteredHistory); // 디버깅용
     if (filteredHistory.length > 0) {
@@ -70,14 +70,14 @@ export default function Home() {
     );
     
     for (const status of sortedHistory) {
-      const deviceKey = `${status.deviceId}-${status.bluetoothDevice}`;
+      const deviceKey = `${status.deviceId}-${status.deviceName}`;
       
       if (!newDeviceTracking.has(deviceKey)) {
         // 새로운 디바이스 추가
         const isOnline = status.engineStatus === 'ON';
         const deviceInfo: DeviceTrackingInfo = {
           deviceId: status.deviceId,
-          bluetoothDevice: status.bluetoothDevice,
+          deviceName: status.deviceName,
           isOnline: isOnline,
           lastEngineStatus: status.engineStatus,
           lastSpeed: status.speed,
@@ -89,7 +89,7 @@ export default function Home() {
         // 연결 시작 시간 찾기 (가장 오래된 ON 상태)
         const connectionStart = history
           .filter(h => h.deviceId === status.deviceId && 
-                      h.bluetoothDevice === status.bluetoothDevice && 
+                      h.deviceName === status.deviceName && 
                       h.engineStatus === 'ON')
           .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())[0];
         
@@ -248,7 +248,7 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <p><strong>기기 ID:</strong> {currentStatus.deviceId}</p>
-              <p><strong>블루투스 기기:</strong> {currentStatus.bluetoothDevice}</p>
+              <p><strong>블루투스 기기:</strong> {currentStatus.deviceName}</p>
               <p><strong>시동 상태:</strong> 
                 <span className={`ml-2 px-2 py-1 rounded text-white text-sm ${
                   currentStatus.engineStatus === 'ON' ? 'bg-green-500' : 'bg-red-500'
@@ -314,7 +314,7 @@ export default function Home() {
         {deviceTracking.size > 0 ? (
           <div className="space-y-4">
             {Array.from(deviceTracking.entries())
-  .filter(([_, info]) => info.bluetoothDevice !== 'Unknown Device')
+  .filter(([_, info]) => info.deviceName !== 'Unknown Device')
   .map(([deviceKey, info]) => (
               <div key={deviceKey} className="border rounded-lg p-4">
                 <div className="flex justify-between items-start mb-3">
@@ -323,7 +323,7 @@ export default function Home() {
                       info.isOnline ? 'bg-green-500 animate-pulse' : 'bg-red-500'
                     }`}></div>
                     <div>
-                      <h3 className="font-semibold text-lg">{info.bluetoothDevice}</h3>
+                      <h3 className="font-semibold text-lg">{info.deviceName}</h3>
                       <p className="text-sm text-gray-600">기기 ID: {info.deviceId}</p>
                     </div>
                   </div>
@@ -388,58 +388,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* 상세 이동 기록 (기존 유지) */}
-      <div className="bg-white border border-gray-200 p-4 rounded-lg shadow-sm">
-        <h2 className="text-xl font-semibold mb-4">📊 상세 이동 기록</h2>
-        {statusHistory.length > 0 ? (
-          <div className="space-y-2 max-h-60 overflow-y-auto">
-            {/* bluetoothDevice가 'Unknown Device'가 아닌, deviceId-bluetoothDevice 조합별 최신 1개만 표시 */}
-{(() => {
-  const uniqueHistoryMap = new Map();
-  statusHistory.slice().reverse().forEach(status => {
-    const key = `${status.deviceId}-${status.bluetoothDevice}`;
-    if (status.bluetoothDevice !== 'Unknown Device' && !uniqueHistoryMap.has(key)) {
-      uniqueHistoryMap.set(key, status);
-    }
-  });
-  const uniqueHistory = Array.from(uniqueHistoryMap.values());
-  return uniqueHistory.map((status, index) => (
-    <div key={index} className="border-b pb-2">
-      <div className="flex justify-between items-center">
-        <div className="flex items-center space-x-2">
-          <span className="text-sm font-medium">{status.bluetoothDevice}</span>
-          <span className={`px-2 py-1 rounded text-white text-xs ${
-            status.engineStatus === 'ON' ? 'bg-green-500' : 'bg-red-500'
-          }`}>
-            {status.engineStatus}
-          </span>
-        </div>
-        <div className="text-right">
-          <div className="text-sm font-mono">{status.speed} km/h</div>
-          <div className="text-xs text-gray-500">
-            {formatTimeOnly(status.timestamp)}
-          </div>
-        </div>
-      </div>
-      {status.location && (
-        <div className="text-xs text-gray-600 mt-1 font-mono">
-          📍 {status.location.latitude.toFixed(4)}, {status.location.longitude.toFixed(4)}
-        </div>
-      )}
-    </div>
-  ));
-})()}
-          </div>
-        ) : (
-          <div className="text-center py-8">
-            <div className="text-gray-500">📋 이동 기록 없음</div>
-            <p className="text-sm text-gray-400 mt-2">
-              차량 이동 시 상세 기록이 표시됩니다
-            </p>
-          </div>
-        )}
-      </div>
-
       {/* 시스템 정보 */}
       <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
         <h3 className="text-lg font-medium text-blue-800 mb-2">💡 사용 방법</h3>
@@ -452,24 +400,6 @@ export default function Home() {
         </ul>
       </div>
 
-      {/* 디버그 정보 (타임스탬프 확인용) */}
-    <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
-    <h3 className="text-lg font-medium text-yellow-800 mb-2">🔧 디버그 정보</h3>
-    <div className="text-sm text-yellow-700 space-y-1">
-        <p>• 현재 로컬 시간: {new Date().toLocaleString('ko-KR', { 
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: false
-        }).replace(/\. /g, '-').replace(/\./g, '').replace(/:/g, ':')}</p>
-        {currentStatus && (
-            <p>• 마지막 수신 타임스탬프: {currentStatus.timestamp}</p>
-        )}
-    </div>
-    </div>
     </main>
   );
 }

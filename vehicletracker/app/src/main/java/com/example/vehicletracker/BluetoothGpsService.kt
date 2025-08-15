@@ -33,12 +33,8 @@ class BluetoothGpsService : Service() {
     private var ignitionOn: Boolean = false
     private var lastSpeed: Float = 0f
     private var lastLocation: Location? = null
-    private val deviceId: String by lazy { 
-        android.provider.Settings.Secure.getString(
-            contentResolver, 
-            android.provider.Settings.Secure.ANDROID_ID
-        ) 
-    }
+    // 기본값으로 ANDROID_ID를 사용하지만, 블루투스 연결 시 디바이스 주소로 대체
+    private var deviceId: String = ""
     private lateinit var bluetoothReceiver: BluetoothStateReceiver
 
     companion object {
@@ -52,6 +48,14 @@ class BluetoothGpsService : Service() {
         super.onCreate()
         try {
             Log.d(TAG, "onCreate called")
+            
+            // ANDROID_ID 초기화
+            deviceId = android.provider.Settings.Secure.getString(
+                contentResolver, 
+                android.provider.Settings.Secure.ANDROID_ID
+            )
+            Log.d(TAG, "기본 디바이스 ID 초기화: $deviceId")
+            
             bluetoothReceiver = BluetoothStateReceiver()
             val filter = IntentFilter().apply {
                 addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
@@ -126,6 +130,11 @@ class BluetoothGpsService : Service() {
             currentDevice = device
             currentDeviceName = deviceName
             currentDeviceAddress = deviceAddress
+            
+            // 블루투스 디바이스 주소를 deviceId로 사용
+            deviceId = deviceAddress
+            Log.i(TAG, "디바이스 ID 업데이트: $deviceId (블루투스 주소)")
+            
             ignitionOn = true
             
             // 즉시 연결 상태 전송
@@ -144,9 +153,16 @@ class BluetoothGpsService : Service() {
         
         Log.i(TAG, "차량 블루투스 연결 해제: $deviceName ($deviceAddress)")
         
-        // 즉시 OFF 상태 전송
+        // 즉시 OFF 상태 전송 (연결 해제 전 디바이스 ID로 마지막 상태 전송)
         ignitionOn = false
         sendUpdateToBackend()
+        
+        // ANDROID_ID로 되돌리기
+        deviceId = android.provider.Settings.Secure.getString(
+            contentResolver, 
+            android.provider.Settings.Secure.ANDROID_ID
+        )
+        Log.i(TAG, "디바이스 ID 초기화: $deviceId (ANDROID_ID)")
         
         // 현재 추적 중인 기기 정보 초기화
         currentDevice = null
@@ -172,6 +188,13 @@ class BluetoothGpsService : Service() {
             ignitionOn = false
             sendUpdateToBackend()
         }
+        
+        // ANDROID_ID로 되돌리기
+        deviceId = android.provider.Settings.Secure.getString(
+            contentResolver, 
+            android.provider.Settings.Secure.ANDROID_ID
+        )
+        Log.i(TAG, "디바이스 ID 초기화: $deviceId (ANDROID_ID)")
         
         // 현재 추적 중인 기기 정보 초기화
         currentDevice = null

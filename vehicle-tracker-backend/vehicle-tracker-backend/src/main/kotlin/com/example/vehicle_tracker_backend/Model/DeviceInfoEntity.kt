@@ -3,7 +3,12 @@ package com.example.vehicle_tracker_backend.model
 import jakarta.persistence.*
 
 @Entity
-@Table(name = "device_info")
+@Table(
+    name = "device_info",
+    uniqueConstraints = [
+        UniqueConstraint(columnNames = ["device_id", "device_name"])
+    ]
+)
 data class DeviceInfoEntity(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

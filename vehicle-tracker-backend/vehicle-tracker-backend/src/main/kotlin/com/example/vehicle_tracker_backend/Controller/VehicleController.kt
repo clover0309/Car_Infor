@@ -3,6 +3,8 @@ package com.example.vehicle_tracker_backend.controller
 import com.example.vehicle_tracker_backend.model.DeviceLocationEntity
 import com.example.vehicle_tracker_backend.model.VehicleStatusEntity
 import com.example.vehicle_tracker_backend.service.VehicleService
+import com.fasterxml.jackson.annotation.JsonAlias
+import com.fasterxml.jackson.annotation.JsonProperty
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import java.time.LocalDateTime
@@ -14,7 +16,7 @@ data class LocationDto(
 
 data class VehicleStatusResponse(
     val deviceId: String,
-    val bluetoothDevice: String,
+    val deviceName: String,
     val engineStatus: String,
     val speed: Int, // speed 필드 추가
     val timestamp: LocalDateTime,
@@ -26,10 +28,10 @@ data class VehicleStatusResponse(
 class VehicleController(private val vehicleService: VehicleService) {
 
         private fun VehicleStatusEntity.toResponse(): VehicleStatusResponse {
-        val deviceInfo = vehicleService.getDeviceInfoByDeviceName(this.bluetoothDevice)
+        val deviceInfo = vehicleService.getDeviceInfoByDeviceName(this.deviceName)
         return VehicleStatusResponse(
             deviceId = deviceInfo?.deviceId ?: this.deviceId, // deviceInfo에서 찾은 실제 deviceId 사용, 없으면 기존 ID 사용
-            bluetoothDevice = this.bluetoothDevice,
+            deviceName = this.deviceName,
             engineStatus = this.engineStatus,
             speed = 0, // speed는 현재 엔티티에 없으므로 기본값 0으로 설정
             timestamp = this.timestamp,
@@ -39,7 +41,9 @@ class VehicleController(private val vehicleService: VehicleService) {
 
     data class VehicleStatusDto(
         val deviceId: String,
-        val bluetoothDevice: String,
+        @JsonProperty("deviceName")
+        @JsonAlias("bluetoothDevice") // 안드로이드 앱 호환성을 위해 bluetoothDevice도 deviceName으로 매핑
+        val deviceName: String,
         val engineStatus: String,
         val speed: Int,
         val timestamp: LocalDateTime,
@@ -50,7 +54,7 @@ class VehicleController(private val vehicleService: VehicleService) {
     fun updateStatus(@RequestBody statusDto: VehicleStatusDto): ResponseEntity<Map<String, String>> {
         val statusEntity = VehicleStatusEntity(
             deviceId = statusDto.deviceId,
-            bluetoothDevice = statusDto.bluetoothDevice,
+            deviceName = statusDto.deviceName,
             engineStatus = statusDto.engineStatus,
             latitude = statusDto.location?.latitude,
             longitude = statusDto.location?.longitude,
