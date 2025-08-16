@@ -18,6 +18,7 @@ import android.location.Location
 import android.os.Build
 import android.os.IBinder
 import android.os.Looper
+import android.os.Handler
 import androidx.core.app.NotificationCompat
 import com.google.android.gms.location.*
 import android.util.Log
@@ -36,6 +37,8 @@ class BluetoothGpsService : Service() {
     // 기본값으로 ANDROID_ID를 사용하지만, 블루투스 연결 시 디바이스 주소로 대체
     private var deviceId: String = ""
     private lateinit var bluetoothReceiver: BluetoothStateReceiver
+    private val handler = Handler(Looper.getMainLooper())
+    private var pendingResetRunnable: Runnable? = null
 
     companion object {
         private const val TAG = "BluetoothGpsService"
@@ -120,6 +123,9 @@ class BluetoothGpsService : Service() {
                     Log.e(TAG, "추가 OFF 상태 전송 중 오류", e)
                 }
             }
+            // 대기 중인 ANDROID_ID 복원 작업이 있으면 취소 (서비스 종료 시 오동작/누수 방지)
+            pendingResetRunnable?.let { handler.removeCallbacks(it) }
+            pendingResetRunnable = null
             
             unregisterReceiver(bluetoothReceiver)
             fusedLocationClient.removeLocationUpdates(locationCallback)
@@ -155,6 +161,9 @@ class BluetoothGpsService : Service() {
             // 블루투스 디바이스 주소를 deviceId로 사용
             deviceId = deviceAddress
             Log.i(TAG, "디바이스 ID 업데이트: $deviceId (블루투스 주소)")
+            // 재연결 시 ANDROID_ID 복원 예약을 취소
+            pendingResetRunnable?.let { handler.removeCallbacks(it) }
+            pendingResetRunnable = null
             
             ignitionOn = true
             
@@ -211,9 +220,15 @@ class BluetoothGpsService : Service() {
         }.start()
         
         // 모든 OFF 상태 전송이 완료된 후 ANDROID_ID로 되돌리기 위해 약간의 지연 추가
-        Thread {
+        // 기존 예약이 있으면 취소 후 재등록
+        pendingResetRunnable?.let { handler.removeCallbacks(it) }
+        pendingResetRunnable = Runnable {
             try {
-                Thread.sleep(3000) // 3초 지연 후 디바이스 ID 초기화
+                // 재연결이 감지되면 복원 취소
+                if (ignitionOn || currentDeviceAddress != null) {
+                    Log.i(TAG, "디바이스 ID 초기화 취소: 재연결 또는 연결 상태 감지")
+                    return@Runnable
+                }
                 deviceId = android.provider.Settings.Secure.getString(
                     contentResolver, 
                     android.provider.Settings.Secure.ANDROID_ID
@@ -221,8 +236,11 @@ class BluetoothGpsService : Service() {
                 Log.i(TAG, "디바이스 ID 초기화: $deviceId (ANDROID_ID)")
             } catch (e: Exception) {
                 Log.e(TAG, "디바이스 ID 초기화 중 오류", e)
+            } finally {
+                pendingResetRunnable = null
             }
-        }.start()
+        }
+        handler.postDelayed(pendingResetRunnable!!, 3000)
         
         // 현재 추적 중인 기기 정보 부분 초기화 (디바이스 이름은 유지)
         currentDevice = null
@@ -280,18 +298,26 @@ class BluetoothGpsService : Service() {
         }
         
         // 모든 OFF 상태 전송이 완료된 후 ANDROID_ID로 되돌리기 위해 약간의 지연 추가
-        Thread {
+        // 기존 예약이 있으면 취소 후 재등록, 재연결/연결 유지 시 복원 스킵
+        pendingResetRunnable?.let { handler.removeCallbacks(it) }
+        pendingResetRunnable = Runnable {
             try {
-                Thread.sleep(3000) // 3초 지연 후 디바이스 ID 초기화
+                if (ignitionOn || currentDeviceAddress != null) {
+                    Log.i(TAG, "디바이스 ID 초기화 취소: 재연결 또는 연결 상태 감지(블루투스 꺼짐 경로)")
+                    return@Runnable
+                }
                 deviceId = android.provider.Settings.Secure.getString(
-                    contentResolver, 
+                    contentResolver,
                     android.provider.Settings.Secure.ANDROID_ID
                 )
                 Log.i(TAG, "디바이스 ID 초기화: $deviceId (ANDROID_ID)")
             } catch (e: Exception) {
                 Log.e(TAG, "디바이스 ID 초기화 중 오류", e)
+            } finally {
+                pendingResetRunnable = null
             }
-        }.start()
+        }
+        handler.postDelayed(pendingResetRunnable!!, 3000)
         
         // 현재 추적 중인 기기 정보 부분 초기화 (디바이스 이름은 유지)
         currentDevice = null

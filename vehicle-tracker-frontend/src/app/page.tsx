@@ -177,7 +177,7 @@ export default function Home() {
         fetchCurrentStatus();
         fetchStatusHistory();
       }
-    }, 5000);
+    }, 3000);
 
     return () => clearInterval(interval);
   }, [isConnected]);
@@ -292,7 +292,7 @@ export default function Home() {
             연결 확인
           </button>
           <div className="text-sm text-gray-600">
-            자동 새로고침: 5초마다
+            자동 새로고침: 3초마다
           </div>
         </div>
       </div>
