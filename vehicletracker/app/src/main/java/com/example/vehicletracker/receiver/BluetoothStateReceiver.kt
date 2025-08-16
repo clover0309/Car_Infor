@@ -210,10 +210,8 @@ class BluetoothStateReceiver : BroadcastReceiver() {
     private fun sendEngineOffStatus(context: Context, deviceName: String, deviceAddress: String) {
         Thread {
             try {
-                val deviceId = android.provider.Settings.Secure.getString(
-                    context.contentResolver, 
-                    android.provider.Settings.Secure.ANDROID_ID
-                )
+                // 중요: ANDROID_ID 대신 블루투스 디바이스 주소를 deviceId로 사용
+                val deviceId = deviceAddress
                 
                 val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
 

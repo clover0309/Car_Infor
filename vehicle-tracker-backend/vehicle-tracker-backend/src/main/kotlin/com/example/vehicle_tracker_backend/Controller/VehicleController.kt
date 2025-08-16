@@ -8,6 +8,7 @@ import com.fasterxml.jackson.annotation.JsonProperty
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import java.time.LocalDateTime
+import org.slf4j.LoggerFactory
 
 data class LocationDto(
     val latitude: Double,
@@ -26,6 +27,7 @@ data class VehicleStatusResponse(
 @RestController
 @RequestMapping("/api/vehicle")
 class VehicleController(private val vehicleService: VehicleService) {
+    private val logger = LoggerFactory.getLogger(VehicleController::class.java)
 
         private fun VehicleStatusEntity.toResponse(): VehicleStatusResponse {
         val deviceInfo = vehicleService.getDeviceInfoByDeviceName(this.deviceName)
@@ -52,6 +54,14 @@ class VehicleController(private val vehicleService: VehicleService) {
 
     @PostMapping("/status")
     fun updateStatus(@RequestBody statusDto: VehicleStatusDto): ResponseEntity<Map<String, String>> {
+        logger.info("[수신] deviceId={}, deviceName={}, engineStatus={}, speed={}, timestamp={}, hasLocation={}",
+            statusDto.deviceId,
+            statusDto.deviceName,
+            statusDto.engineStatus,
+            statusDto.speed,
+            statusDto.timestamp,
+            statusDto.location != null
+        )
         val statusEntity = VehicleStatusEntity(
             deviceId = statusDto.deviceId,
             deviceName = statusDto.deviceName,

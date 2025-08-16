@@ -61,7 +61,11 @@ export const vehicleApi = {
     // 현재 차량 상태 조회
     getCurrentStatus: async (): Promise<VehicleStatus | null> => {
         try {
-            const response = await fetch(`${API_BASE_URL}/current`);
+            const response = await fetch(`${API_BASE_URL}/current`, { cache: 'no-store' });
+            if (response.status === 204) {
+                // No Content: 현재 상태 없음
+                return null;
+            }
             if (!response.ok) {
                 throw new Error('Failed to fetch current status');
             }
@@ -78,7 +82,7 @@ export const vehicleApi = {
     // 차량 상태 이력 조회
     getStatusHistory: async (): Promise<VehicleStatus[]> => {
         try {
-            const response = await fetch(`${API_BASE_URL}/history`);
+            const response = await fetch(`${API_BASE_URL}/history`, { cache: 'no-store' });
             if (!response.ok) {
                 throw new Error('Failed to fetch status history');
             }
@@ -94,7 +98,7 @@ export const vehicleApi = {
     // 백엔드 연결 테스트
     testConnection: async (): Promise<boolean> => {
         try {
-            const response = await fetch(`${API_BASE_URL}/test`);
+            const response = await fetch(`${API_BASE_URL}/test`, { cache: 'no-store' });
             return response.ok;
         } catch (error) {
             console.error('Error testing connection:', error);

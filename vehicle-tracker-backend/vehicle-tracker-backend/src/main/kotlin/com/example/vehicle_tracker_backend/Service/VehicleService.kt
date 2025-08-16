@@ -30,20 +30,17 @@ class VehicleService(
     }
 
     fun getDeviceInfoByDeviceName(deviceName: String): DeviceInfoEntity? {
-        try {
-            // 중복 결과 처리: 가장 최근에 등록된 기기 정보 반환
-            val results = deviceInfoRepository.findAll()
-                .filter { it.deviceName == deviceName }
-                .sortedByDescending { it.idx }
-            
-            return if (results.isNotEmpty()) {
-                results.first() // 가장 최근에 등록된 기기 정보 반환
-            } else {
-                null
+        return try {
+            // 레포지토리 메서드를 활용하여 최신 등록 정보를 우선 조회
+            val results = deviceInfoRepository.findAllByDeviceNameOrderByIdxDesc(deviceName)
+            val found = results.firstOrNull() ?: deviceInfoRepository.findByDeviceName(deviceName)
+            if (found == null) {
+                logger.info("[기기 정보 없음] 기기 이름: {}", deviceName)
             }
+            found
         } catch (e: Exception) {
-            println("[기기 정보 조회 오류] 기기 이름: $deviceName, 오류: ${e.message}")
-            return null
+            logger.error("[기기 정보 조회 오류] 기기 이름: {}, 오류: {}", deviceName, e.message)
+            null
         }
     }
 
@@ -57,19 +54,61 @@ class VehicleService(
                 logger.warn("ANDROID_ID 패턴이 감지됨: ${status.deviceId}, 기기 이름: ${status.deviceName}")
             }
             
-            // 디바이스 이름으로 실제 등록된 디바이스 정보 조회
-            val deviceInfo = if (status.deviceName != "Unknown Device") {
+            // 1. 먼저 deviceId로 기존 등록된 디바이스 정보 조회 (블루투스 MAC 주소인 경우)
+            val deviceInfoByDeviceId = if (!isAndroidId) {
+                deviceInfoRepository.findByDeviceId(status.deviceId)
+            } else {
+                null
+            }
+            
+            // 2. deviceId로 찾지 못한 경우 deviceName으로 조회 시도
+            val deviceInfo = deviceInfoByDeviceId ?: if (status.deviceName != "Unknown Device") {
                 getDeviceInfoByDeviceName(status.deviceName)
             } else {
                 null
             }
             
-            // 실제 디바이스 ID를 사용하여 새로운 엔티티 생성
+            // 3. 마지막 상태 조회 (deviceId 기준)
+            val lastStatus = if (!isAndroidId) {
+                getLatestStatus(status.deviceId)
+            } else {
+                null
+            }
+
+            // 3-1. 추가 매핑: ANDROID_ID이거나 deviceInfo가 없을 때, deviceName 기준 최신 상태 조회
+            val lastByName = if (status.deviceName != "Unknown Device") {
+                vehicleStatusRepository.findFirstByDeviceNameOrderByTimestampDescIdDesc(status.deviceName)
+            } else null
+            
+            // 4. 실제 디바이스 ID를 사용하여 새로운 엔티티 생성
             val entityToSave = if (deviceInfo != null) {
                 // 등록된 디바이스 정보가 있으면 해당 디바이스 ID 사용
                 VehicleStatusEntity(
                     deviceId = deviceInfo.deviceId,
-                    deviceName = status.deviceName,
+                    // 중요: DB 외래키 (device_id, device_name) 페어와 정확히 일치시키기 위해
+                    // 등록된 디바이스 이름을 항상 사용합니다.
+                    deviceName = deviceInfo.deviceName,
+                    engineStatus = status.engineStatus,
+                    latitude = status.latitude,
+                    longitude = status.longitude,
+                    timestamp = status.timestamp
+                )
+            } else if (lastStatus != null && !isAndroidId) {
+                // 등록된 디바이스 정보는 없지만 이전 상태가 있는 경우
+                // 이전 상태의 deviceName 유지 (Unknown Device가 아닌 경우에만)
+                VehicleStatusEntity(
+                    deviceId = status.deviceId,
+                    deviceName = if (status.deviceName != "Unknown Device") status.deviceName else lastStatus.deviceName,
+                    engineStatus = status.engineStatus,
+                    latitude = status.latitude,
+                    longitude = status.longitude,
+                    timestamp = status.timestamp
+                )
+            } else if (lastByName != null) {
+                // deviceName으로 매핑 가능한 최근 기록이 있는 경우 해당 deviceId로 저장
+                VehicleStatusEntity(
+                    deviceId = lastByName.deviceId,
+                    deviceName = lastByName.deviceName,
                     engineStatus = status.engineStatus,
                     latitude = status.latitude,
                     longitude = status.longitude,
@@ -96,7 +135,7 @@ class VehicleService(
             
             // 차량 상태 저장
             vehicleStatusRepository.save(entityToSave)
-            logger.info("차량 상태 저장 성공: 기기 ID: ${entityToSave.deviceId}, 상태: ${entityToSave.engineStatus}")
+            logger.info("차량 상태 저장 성공: 기기 ID: ${entityToSave.deviceId}, 상태: ${entityToSave.engineStatus}, 디바이스 이름: ${entityToSave.deviceName}")
 
             // 시동이 꺼졌을 때(OFF) 마지막 위치 정보 저장 또는 업데이트
             if (entityToSave.engineStatus == "OFF") {
@@ -129,7 +168,7 @@ class VehicleService(
                 logger.info("위치 정보 저장 성공: 기기 ID: ${deviceInfo.deviceId}, 기기 이름: ${entityToSave.deviceName}")
             } else if (isAndroidId) {
                 // ANDROID_ID로 추정되는 경우 위치 정보 저장 안함
-                logger.warn("ANDROID_ID 패턴이 감지되어 위치 정보 저장을 건너뛼니다: ${originalStatus.deviceId}")
+                logger.warn("ANDROID_ID 패턴이 감지되어 위치 정보 저장을 건너뜁니다: ${originalStatus.deviceId}")
             }
         } catch (e: Exception) {
             // 위치 저장 오류는 별도 로깅만 하고 예외를 전파하지 않음 (메인 트랜잭션에 영향 없음)
@@ -139,7 +178,11 @@ class VehicleService(
 
 
     fun getLatestStatus(deviceId: String): VehicleStatusEntity? {
-        return vehicleStatusRepository.findByDeviceIdOrderByTimestampDesc(deviceId).firstOrNull()
+        return vehicleStatusRepository.findFirstByDeviceIdOrderByTimestampDescIdDesc(deviceId)
+    }
+
+    fun getLatestStatusByDeviceName(deviceName: String): VehicleStatusEntity? {
+        return vehicleStatusRepository.findFirstByDeviceNameOrderByTimestampDescIdDesc(deviceName)
     }
 
     fun getLatestLocation(deviceId: String): DeviceLocationEntity? {
@@ -147,14 +190,14 @@ class VehicleService(
     }
 
     fun getAllStatuses(deviceId: String): List<VehicleStatusEntity> {
-        return vehicleStatusRepository.findByDeviceIdOrderByTimestampDesc(deviceId)
+        return vehicleStatusRepository.findByDeviceIdOrderByTimestampDescIdDesc(deviceId)
     }
 
     fun getLatestStatusForAllDevices(): VehicleStatusEntity? {
-        return vehicleStatusRepository.findFirstByOrderByTimestampDesc()
+        return vehicleStatusRepository.findFirstByOrderByTimestampDescIdDesc()
     }
 
     fun getAllStatuses(): List<VehicleStatusEntity> {
-        return vehicleStatusRepository.findAllByOrderByTimestampDesc()
+        return vehicleStatusRepository.findAllByOrderByTimestampDescIdDesc()
     }
 }

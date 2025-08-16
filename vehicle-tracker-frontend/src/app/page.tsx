@@ -26,6 +26,24 @@ export default function Home() {
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
 
+  // 안전한 로컬 타임스탬프 파서 ("yyyy-MM-dd HH:mm:ss" 지원)
+  const parseLocalTimestamp = (timestamp: string): number => {
+    try {
+      // 이미 "YYYY-MM-DD HH:mm:ss" 형식이면 수동 파싱
+      if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(timestamp)) {
+        const [datePart, timePart] = timestamp.split(' ');
+        const [year, month, day] = datePart.split('-').map(Number);
+        const [hours, minutes, seconds] = timePart.split(':').map(Number);
+        return new Date(year, month - 1, day, hours, minutes, seconds).getTime();
+      }
+      // ISO-8601 등은 기본 파서 사용
+      const t = Date.parse(timestamp);
+      return isNaN(t) ? 0 : t;
+    } catch {
+      return 0;
+    }
+  };
+
   // 백엔드 연결 상태 확인
   const checkConnection = async () => {
     const connected = await vehicleApi.testConnection();
@@ -38,8 +56,16 @@ export default function Home() {
     const status = await vehicleApi.getCurrentStatus();
     console.log('Received status:', status); // 디버깅용
     console.log('Timestamp format:', status?.timestamp); // timestamp 형식 확인
-    if (status && status.deviceName !== 'Unknown Device') {
-      setCurrentStatus(status);
+    
+    // 상태가 있고 유효한 디바이스면 상태 업데이트
+    if (status) {
+      // Unknown Device라도 엔진 상태가 OFF면 표시하지 않음
+      if (status.deviceName === 'Unknown Device' && status.engineStatus === 'OFF') {
+        setCurrentStatus(null);
+      } else {
+        // 유효한 디바이스나 엔진 상태가 ON이면 표시
+        setCurrentStatus(status);
+      }
     } else {
       setCurrentStatus(null);
     }
@@ -48,26 +74,42 @@ export default function Home() {
   // 상태 이력 조회 및 디바이스 추적 정보 업데이트
     const fetchStatusHistory = async () => {
       const history = await vehicleApi.getStatusHistory();
-    // Unknown Device 제외
-    const filteredHistory = history.filter(
-      (status) => status.deviceName !== 'Unknown Device'
-    );
-    console.log('Received history:', filteredHistory); // 디버깅용
-    if (filteredHistory.length > 0) {
+      console.log('Received history:', history); // 디버깅용 - 전체 히스토리 확인
+      
+      // 더 정확한 필터링 적용: Unknown Device이면서 OFF 상태인 것만 제외
+      const filteredHistory = history.filter(status => {
+        // Unknown Device이면서 OFF 상태인 것만 제외
+        if (status.deviceName === 'Unknown Device' && status.engineStatus === 'OFF') {
+          return false;
+        }
+        return true;
+      });
+      
+      if (filteredHistory.length > 0) {
         console.log('First history timestamp:', filteredHistory[0].timestamp); // 형식 확인
-    }
-    setStatusHistory(filteredHistory);
-    updateDeviceTracking(filteredHistory);
-  };
+      }
+      
+      setStatusHistory(filteredHistory);
+      updateDeviceTracking(filteredHistory);
+    };
 
   // 디바이스별 추적 정보 업데이트 함수
   const updateDeviceTracking = (history: VehicleStatus[]) => {
     const newDeviceTracking = new Map<string, DeviceTrackingInfo>();
     
     // 역순으로 정렬하여 최신 데이터를 우선 처리
-    const sortedHistory = [...history].sort((a, b) => 
-      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-    );
+    const sortedHistory = [...history].sort((a, b) => {
+      const tb = parseLocalTimestamp(b.timestamp);
+      const ta = parseLocalTimestamp(a.timestamp);
+      if (tb !== ta) return tb - ta;
+      // 동시간대(tie)일 경우 같은 디바이스에서는 OFF를 ON보다 우선하도록 함
+      if (a.deviceId === b.deviceId && a.deviceName === b.deviceName) {
+        if (a.engineStatus === b.engineStatus) return 0;
+        return a.engineStatus === 'OFF' ? -1 : 1;
+      }
+      // 다른 디바이스 간에는 상대 순서를 유지
+      return 0;
+    });
     
     for (const status of sortedHistory) {
       const deviceKey = `${status.deviceId}-${status.deviceName}`;
@@ -91,7 +133,7 @@ export default function Home() {
           .filter(h => h.deviceId === status.deviceId && 
                       h.deviceName === status.deviceName && 
                       h.engineStatus === 'ON')
-          .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())[0];
+          .sort((a, b) => parseLocalTimestamp(a.timestamp) - parseLocalTimestamp(b.timestamp))[0];
         
         if (connectionStart) {
           deviceInfo.connectionTime = connectionStart.timestamp;
@@ -99,9 +141,29 @@ export default function Home() {
         
         newDeviceTracking.set(deviceKey, deviceInfo);
       } else {
-        // 기존 디바이스 업데이트 (카운트만 증가)
+        // 기존 디바이스 업데이트 (최신 상태 반영)
         const existing = newDeviceTracking.get(deviceKey)!;
         existing.totalUpdates++;
+        
+        // 중요: 최신 상태 정보 업데이트
+        // 동시간대(equal timestamp)에서는 OFF가 ON을 덮어쓰도록 보정
+        const statusTs = parseLocalTimestamp(status.timestamp);
+        const existingTs = parseLocalTimestamp(existing.lastUpdate);
+        const shouldUpdate =
+          statusTs > existingTs ||
+          (statusTs === existingTs && status.engineStatus === 'OFF' && existing.lastEngineStatus !== 'OFF');
+
+        if (shouldUpdate) {
+          existing.lastEngineStatus = status.engineStatus;
+          existing.isOnline = status.engineStatus === 'ON';
+          existing.lastSpeed = status.speed;
+          existing.lastUpdate = status.timestamp;
+          
+          // 위치 정보가 있으면 업데이트
+          if (status.location) {
+            existing.lastLocation = status.location;
+          }
+        }
       }
     }
     

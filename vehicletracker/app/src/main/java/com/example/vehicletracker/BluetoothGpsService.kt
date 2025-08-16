@@ -97,7 +97,28 @@ class BluetoothGpsService : Service() {
             if (ignitionOn) {
                 Log.i(TAG, "[시동 OFF 감지] 서비스 종료로 인한 엔진 OFF 상태 전송, 기기: ${currentDeviceName ?: "Unknown"}")
                 ignitionOn = false
-                sendUpdateToBackend()
+                
+                // 중요: 현재 디바이스 ID 기록 (로그용)
+                val currentId = deviceId
+                Log.i(TAG, "서비스 종료 - 디바이스 ID($currentId)로 OFF 상태 전송")
+                
+                // 서비스 종료 시 확실하게 OFF 상태 전송
+                sendUpdateToBackend(currentId)
+                
+                // 약간의 지연 후 한 번 더 OFF 상태 전송 (네트워크 문제로 첫 번째 요청이 실패할 경우를 대비)
+                try {
+                    // 서비스 종료 중이므로 별도 스레드 없이 바로 실행
+                    Thread.sleep(500) // 0.5초 지연 (서비스 종료 중이므로 짧게 설정)
+                    sendUpdateToBackend(currentId) // 한 번 더 OFF 상태 전송
+                    Log.i(TAG, "서비스 종료 - 추가 OFF 상태 전송 완료")
+                    
+                    // 한 번 더 지연 후 세 번째 OFF 상태 전송 (확실한 전송을 위해)
+                    Thread.sleep(500) // 0.5초 추가 지연
+                    sendUpdateToBackend(currentId) // 세 번째 OFF 상태 전송
+                    Log.i(TAG, "서비스 종료 - 세 번째 OFF 상태 전송 완료")
+                } catch (e: Exception) {
+                    Log.e(TAG, "추가 OFF 상태 전송 중 오류", e)
+                }
             }
             
             unregisterReceiver(bluetoothReceiver)
@@ -140,6 +161,17 @@ class BluetoothGpsService : Service() {
             // 즉시 연결 상태 전송
             sendUpdateToBackend()
             
+            // 재연결 시 위치 업데이트 재시작 보장
+            try {
+                fusedLocationClient.requestLocationUpdates(
+                    LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 2000L)
+                        .setMinUpdateIntervalMillis(1000L)
+                        .build(),
+                    locationCallback,
+                    Looper.getMainLooper()
+                )
+            } catch (_: Exception) { /* 이미 시작된 경우 무시 */ }
+
             Log.i(TAG, "차량 추적 시작: $deviceName")
         }
     }
@@ -153,23 +185,60 @@ class BluetoothGpsService : Service() {
         
         Log.i(TAG, "차량 블루투스 연결 해제: $deviceName ($deviceAddress)")
         
-        // 즉시 OFF 상태 전송 (연결 해제 전 디바이스 ID로 마지막 상태 전송)
+        // 중요: 연결 해제 시에도 블루투스 디바이스 ID를 유지하여 OFF 상태 전송
+        // 디바이스 ID를 변경하기 전에 현재 디바이스 ID로 OFF 상태 전송
+        val originalDeviceId = deviceId
         ignitionOn = false
-        sendUpdateToBackend()
         
-        // ANDROID_ID로 되돌리기
-        deviceId = android.provider.Settings.Secure.getString(
-            contentResolver, 
-            android.provider.Settings.Secure.ANDROID_ID
-        )
-        Log.i(TAG, "디바이스 ID 초기화: $deviceId (ANDROID_ID)")
+        // 연결 해제 시 확실하게 OFF 상태 전송 (여러 번 전송하여 확실히 반영되도록 함)
+        Log.i(TAG, "블루투스 연결 해제 - 디바이스 ID($originalDeviceId)로 OFF 상태 전송")
+        sendUpdateToBackend(originalDeviceId)
         
-        // 현재 추적 중인 기기 정보 초기화
+        // 약간의 지연 후 한 번 더 OFF 상태 전송 (네트워크 문제로 첫 번째 요청이 실패할 경우를 대비)
+        Thread {
+            try {
+                Thread.sleep(1000) // 1초 지연
+                sendUpdateToBackend(originalDeviceId) // 한 번 더 OFF 상태 전송
+                Log.i(TAG, "블루투스 연결 해제 - 추가 OFF 상태 전송 완료")
+                
+                // 한 번 더 지연 후 세 번째 OFF 상태 전송 (확실한 전송을 위해)
+                Thread.sleep(2000) // 2초 추가 지연
+                sendUpdateToBackend(originalDeviceId) // 세 번째 OFF 상태 전송
+                Log.i(TAG, "블루투스 연결 해제 - 세 번째 OFF 상태 전송 완료")
+            } catch (e: Exception) {
+                Log.e(TAG, "추가 OFF 상태 전송 중 오류", e)
+            }
+        }.start()
+        
+        // 모든 OFF 상태 전송이 완료된 후 ANDROID_ID로 되돌리기 위해 약간의 지연 추가
+        Thread {
+            try {
+                Thread.sleep(3000) // 3초 지연 후 디바이스 ID 초기화
+                deviceId = android.provider.Settings.Secure.getString(
+                    contentResolver, 
+                    android.provider.Settings.Secure.ANDROID_ID
+                )
+                Log.i(TAG, "디바이스 ID 초기화: $deviceId (ANDROID_ID)")
+            } catch (e: Exception) {
+                Log.e(TAG, "디바이스 ID 초기화 중 오류", e)
+            }
+        }.start()
+        
+        // 현재 추적 중인 기기 정보 부분 초기화 (디바이스 이름은 유지)
         currentDevice = null
-        currentDeviceName = null
         currentDeviceAddress = null
         
-        Log.i(TAG, "차량 추적 중지: $deviceName")
+        // 중요: currentDeviceName은 초기화하지 않고 유지
+        // 이렇게 하면 연결 해제 후에도 마지막으로 연결된 디바이스 이름을 계속 사용
+        
+        Log.i(TAG, "차량 추적 중지: $deviceName (디바이스 이름 유지: $currentDeviceName)")
+
+        // 연결 해제 시 위치 업데이트 중단 (주기 전송 완전 차단)
+        try {
+            fusedLocationClient.removeLocationUpdates(locationCallback)
+        } catch (e: Exception) {
+            Log.w(TAG, "위치 업데이트 중단 중 예외", e)
+        }
     }
 
     /**
@@ -183,25 +252,62 @@ class BluetoothGpsService : Service() {
         
         // 블루투스가 꺼진 경우에도 OFF 상태 전송
         if (ignitionOn) {
+            // 중요: 현재 디바이스 정보 유지하면서 OFF 상태 전송
+            val originalDeviceId = deviceId
             currentDeviceName = deviceName
             currentDeviceAddress = deviceAddress
             ignitionOn = false
-            sendUpdateToBackend()
+            
+            // 블루투스 꺼짐 시 확실하게 OFF 상태 전송
+            Log.i(TAG, "블루투스 꺼짐 - 디바이스 ID($originalDeviceId)로 OFF 상태 전송")
+            sendUpdateToBackend(originalDeviceId)
+            
+            // 약간의 지연 후 한 번 더 OFF 상태 전송
+            Thread {
+                try {
+                    Thread.sleep(1000) // 1초 지연
+                    sendUpdateToBackend(originalDeviceId) // 한 번 더 OFF 상태 전송
+                    Log.i(TAG, "블루투스 꺼짐 - 추가 OFF 상태 전송 완료")
+                    
+                    // 한 번 더 지연 후 세 번째 OFF 상태 전송 (확실한 전송을 위해)
+                    Thread.sleep(2000) // 2초 추가 지연
+                    sendUpdateToBackend(originalDeviceId) // 세 번째 OFF 상태 전송
+                    Log.i(TAG, "블루투스 꺼짐 - 세 번째 OFF 상태 전송 완료")
+                } catch (e: Exception) {
+                    Log.e(TAG, "추가 OFF 상태 전송 중 오류", e)
+                }
+            }.start()
         }
         
-        // ANDROID_ID로 되돌리기
-        deviceId = android.provider.Settings.Secure.getString(
-            contentResolver, 
-            android.provider.Settings.Secure.ANDROID_ID
-        )
-        Log.i(TAG, "디바이스 ID 초기화: $deviceId (ANDROID_ID)")
+        // 모든 OFF 상태 전송이 완료된 후 ANDROID_ID로 되돌리기 위해 약간의 지연 추가
+        Thread {
+            try {
+                Thread.sleep(3000) // 3초 지연 후 디바이스 ID 초기화
+                deviceId = android.provider.Settings.Secure.getString(
+                    contentResolver, 
+                    android.provider.Settings.Secure.ANDROID_ID
+                )
+                Log.i(TAG, "디바이스 ID 초기화: $deviceId (ANDROID_ID)")
+            } catch (e: Exception) {
+                Log.e(TAG, "디바이스 ID 초기화 중 오류", e)
+            }
+        }.start()
         
-        // 현재 추적 중인 기기 정보 초기화
+        // 현재 추적 중인 기기 정보 부분 초기화 (디바이스 이름은 유지)
         currentDevice = null
-        currentDeviceName = null
         currentDeviceAddress = null
         
-        Log.i(TAG, "블루투스 꺼짐으로 인한 차량 추적 중지")
+        // 중요: currentDeviceName은 초기화하지 않고 유지
+        // 이렇게 하면 블루투스가 꺼진 후에도 마지막으로 연결된 디바이스 이름을 계속 사용
+        
+        Log.i(TAG, "블루투스 꺼짐으로 인한 차량 추적 중지 (디바이스 이름 유지: $currentDeviceName)")
+
+        // 블루투스 어댑터 꺼짐 시 위치 업데이트 중단
+        try {
+            fusedLocationClient.removeLocationUpdates(locationCallback)
+        } catch (e: Exception) {
+            Log.w(TAG, "위치 업데이트 중단 중 예외", e)
+        }
     }
 
     private fun startForegroundServiceNotification() {
@@ -243,8 +349,9 @@ class BluetoothGpsService : Service() {
                 lastLocation = location
                 lastSpeed = location?.speed ?: 0f
                 
-                // 차량이 연결되어 있고 시동이 켜진 상태일 때만 전송
-                if (ignitionOn && currentDeviceName != null) {
+                // 차량이 실제로 연결되어 있고(주소 존재) 시동이 켜진 상태일 때만 전송
+                // currentDeviceName 은 OFF 전송을 위해 유지되므로 주소를 기준으로 연결 여부를 판단
+                if (ignitionOn && currentDeviceAddress != null) {
                     sendUpdateToBackend()
                 }
             }
@@ -265,16 +372,21 @@ class BluetoothGpsService : Service() {
     }
 
     @android.annotation.SuppressLint("MissingPermission")
-    private fun sendUpdateToBackend() {
-        val engineStatus = if (ignitionOn) "ON" else "OFF"
+    private fun sendUpdateToBackend(overrideDeviceId: String? = null) {
+        // 실제 연결 여부(주소 존재)를 기반으로 엔진상태를 계산하여, 연결이 없으면 어떤 경우에도 ON을 보내지 않도록 보장
+        val isConnected = currentDeviceAddress != null
+        val engineStatus = if (ignitionOn && isConnected) "ON" else "OFF"
         val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
-        val btName = currentDevice?.name ?: currentDeviceName ?: "Unknown Device"
+        
+        // 중요: 블루투스 연결 해제 시에도 마지막으로 연결된 디바이스 이름을 유지
+        // 저장된 디바이스 이름이 있으면 사용, 없으면 Unknown Device
+        val btName = currentDeviceName ?: "Unknown Device"
         
         val dto = com.example.vehicletracker.api.VehicleStatusDto(
-            deviceId = deviceId,
+            deviceId = overrideDeviceId ?: deviceId,
             bluetoothDevice = btName,
             engineStatus = engineStatus,
-            speed = if (ignitionOn) lastSpeed else 0f, // OFF 상태일 때는 속도 0
+            speed = if (engineStatus == "ON") lastSpeed else 0f, // OFF 상태일 때는 속도 0
             timestamp = timestamp,
             location = if (ignitionOn && lastLocation != null) {
                 com.example.vehicletracker.api.VehicleLocation(
