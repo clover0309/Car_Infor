@@ -259,8 +259,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         try {
-            // 앱 종료 시 시동 OFF 상태 전송
-            sendEngineOffStatus()
+            // 앱 종료 시 직접 OFF 전송은 중복/오검지 위험이 있어 제거
+            // OFF 전송은 BluetoothGpsService에서만 책임집니다.
             
             if (::webView.isInitialized) {
                 webView.destroy()
@@ -275,6 +275,7 @@ class MainActivity : AppCompatActivity() {
     /**
      * 앱 종료 시 엔진 OFF 상태를 서버에 전송
      */
+    // 현재는 사용하지 않음: OFF 전송은 BluetoothGpsService에서만 처리
     private fun sendEngineOffStatus() {
         Log.i("MainActivity", "[시동 OFF 감지] 앱 종료로 인한 엔진 OFF 상태 전송 시도")
         Thread {

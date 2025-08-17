@@ -62,6 +62,15 @@ class VehicleController(private val vehicleService: VehicleService) {
             statusDto.timestamp,
             statusDto.location != null
         )
+        // 위치 상세 로그 및 유효성 경고
+        statusDto.location?.let {
+            logger.info("[수신 위치] lat={}, lon={}", it.latitude, it.longitude)
+            val inRange = it.latitude in -90.0..90.0 && it.longitude in -180.0..180.0
+            val isZeroZero = it.latitude == 0.0 && it.longitude == 0.0
+            if (!inRange || isZeroZero) {
+                logger.warn("[수신 위치 경고] 유효하지 않은 좌표(lat={}, lon={})", it.latitude, it.longitude)
+            }
+        }
         val statusEntity = VehicleStatusEntity(
             deviceId = statusDto.deviceId,
             deviceName = statusDto.deviceName,

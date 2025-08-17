@@ -156,16 +156,32 @@ class VehicleService(
         try {
             // 디바이스 이름이 Unknown Device가 아니고 등록된 디바이스 정보가 있는 경우에만 처리
             if (entityToSave.deviceName != "Unknown Device" && deviceInfo != null) {
+                // 위치 유효성 검사: null, 범위 초과, (0.0, 0.0)은 저장하지 않음
+                val lat = entityToSave.latitude
+                val lon = entityToSave.longitude
+
+                if (lat == null || lon == null) {
+                    logger.warn("[위치 저장 건너뜀] 위/경도 없음: deviceId={}, deviceName={}, engineStatus={}", deviceInfo.deviceId, entityToSave.deviceName, entityToSave.engineStatus)
+                    return
+                }
+
+                val inRange = lat in -90.0..90.0 && lon in -180.0..180.0
+                val isZeroZero = lat == 0.0 && lon == 0.0
+                if (!inRange || isZeroZero) {
+                    logger.warn("[위치 저장 건너뜀] 유효하지 않은 좌표(lat={}, lon={}): deviceId={}, deviceName={}", lat, lon, deviceInfo.deviceId, entityToSave.deviceName)
+                    return
+                }
+
                 // 위치 정보 저장
                 val location = DeviceLocationEntity(
                     deviceId = deviceInfo.deviceId, // 실제 등록된 기기 ID 사용
                     deviceName = entityToSave.deviceName,
-                    latitude = entityToSave.latitude ?: 0.0,
-                    longitude = entityToSave.longitude ?: 0.0,
+                    latitude = lat,
+                    longitude = lon,
                     timestamp = entityToSave.timestamp
                 )
                 deviceLocationRepository.save(location)
-                logger.info("위치 정보 저장 성공: 기기 ID: ${deviceInfo.deviceId}, 기기 이름: ${entityToSave.deviceName}")
+                logger.info("위치 정보 저장 성공: 기기 ID: ${deviceInfo.deviceId}, 기기 이름: ${entityToSave.deviceName}, lat={}, lon={}", lat, lon)
             } else if (isAndroidId) {
                 // ANDROID_ID로 추정되는 경우 위치 정보 저장 안함
                 logger.warn("ANDROID_ID 패턴이 감지되어 위치 정보 저장을 건너뜁니다: ${originalStatus.deviceId}")

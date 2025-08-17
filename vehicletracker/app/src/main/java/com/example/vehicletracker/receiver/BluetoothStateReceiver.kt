@@ -118,8 +118,8 @@ class BluetoothStateReceiver : BroadcastReceiver() {
         if (isVehicleBluetoothDevice(deviceName, deviceAddress)) {
             Log.i(TAG, "차량 블루투스 기기 연결 해제: $deviceName")
 
-            // 서버에 OFF 상태 전송
-            sendEngineOffStatus(context, deviceName, deviceAddress)
+            // 서버로 직접 OFF 전송은 중복을 유발할 수 있어 제거
+            // OFF 전송은 BluetoothGpsService에서 일괄 처리합니다.
 
             // 알림 표시
             NotificationHelper.showBluetoothDisconnectedNotification(
@@ -160,8 +160,7 @@ class BluetoothStateReceiver : BroadcastReceiver() {
                 // 마지막으로 연결된 차량 기기가 있다면 OFF 상태 전송
                 val (lastDeviceName, lastDeviceAddress) = getLastConnectedDevice(context)
                 if (lastDeviceName != null && lastDeviceAddress != null) {
-                    Log.i(TAG, "블루투스 꺼짐으로 인한 차량 연결 해제: $lastDeviceName")
-                    sendEngineOffStatus(context, lastDeviceName, lastDeviceAddress)
+                    Log.i(TAG, "블루투스 꺼짐으로 인한 차량 연결 해제: $lastDeviceName (서비스에 위임)")
                     
                     // BluetoothGpsService에 블루투스 꺼짐 이벤트 전달
                     try {
