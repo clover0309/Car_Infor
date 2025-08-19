@@ -5,14 +5,15 @@ import com.example.vehicle_tracker_backend.model.VehicleStatusEntity
 import com.example.vehicle_tracker_backend.service.VehicleService
 import com.fasterxml.jackson.annotation.JsonAlias
 import com.fasterxml.jackson.annotation.JsonProperty
+import com.fasterxml.jackson.annotation.JsonFormat
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import java.time.LocalDateTime
 import org.slf4j.LoggerFactory
 
 data class LocationDto(
-    val latitude: Double,
-    val longitude: Double
+    val latitude: Double?,
+    val longitude: Double?
 )
 
 data class VehicleStatusResponse(
@@ -47,7 +48,8 @@ class VehicleController(private val vehicleService: VehicleService) {
         @JsonAlias("bluetoothDevice") // 안드로이드 앱 호환성을 위해 bluetoothDevice도 deviceName으로 매핑
         val deviceName: String,
         val engineStatus: String,
-        val speed: Int,
+        val speed: Double,
+        @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
         val timestamp: LocalDateTime,
         val location: LocationDto?
     )
@@ -65,10 +67,12 @@ class VehicleController(private val vehicleService: VehicleService) {
         // 위치 상세 로그 및 유효성 경고
         statusDto.location?.let {
             logger.info("[수신 위치] lat={}, lon={}", it.latitude, it.longitude)
-            val inRange = it.latitude in -90.0..90.0 && it.longitude in -180.0..180.0
-            val isZeroZero = it.latitude == 0.0 && it.longitude == 0.0
+            val lat = it.latitude
+            val lon = it.longitude
+            val inRange = (lat != null && lon != null && lat in -90.0..90.0 && lon in -180.0..180.0)
+            val isZeroZero = (lat == 0.0 && lon == 0.0)
             if (!inRange || isZeroZero) {
-                logger.warn("[수신 위치 경고] 유효하지 않은 좌표(lat={}, lon={})", it.latitude, it.longitude)
+                logger.warn("[수신 위치 경고] 유효하지 않은 좌표(lat={}, lon={})", lat, lon)
             }
         }
         val statusEntity = VehicleStatusEntity(

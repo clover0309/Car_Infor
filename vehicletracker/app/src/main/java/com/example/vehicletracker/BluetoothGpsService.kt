@@ -41,6 +41,8 @@ class BluetoothGpsService : Service() {
     private var pendingResetRunnable: Runnable? = null
     // 현재 연결 세션에서 OFF 상태에 마지막 위치를 포함해 전송했는지 여부
     private var hasSentOffLocationForCurrentDisconnect: Boolean = false
+    // 위치 콜백이 없을 때도 주기적으로 상태를 전송하기 위한 타이커
+    private var statusTicker: Runnable? = null
 
     companion object {
         private const val TAG = "BluetoothGpsService"
@@ -73,6 +75,22 @@ class BluetoothGpsService : Service() {
             fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
             startForegroundServiceNotification()
             startLocationUpdates()
+
+            // 3초 주기의 상태 전송 타이커 시작 (연결/시동 상태를 내부에서 체크)
+            statusTicker = object : Runnable {
+                override fun run() {
+                    try {
+                        if (ignitionOn && currentDeviceAddress != null) {
+                            sendUpdateToBackend()
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "statusTicker 실행 중 예외", e)
+                    } finally {
+                        handler.postDelayed(this, 3000)
+                    }
+                }
+            }
+            handler.postDelayed(statusTicker!!, 3000)
         } catch (e: Exception) {
             Log.e(TAG, "onCreate crash", e)
         }
@@ -128,6 +146,9 @@ class BluetoothGpsService : Service() {
             // 대기 중인 ANDROID_ID 복원 작업이 있으면 취소 (서비스 종료 시 오동작/누수 방지)
             pendingResetRunnable?.let { handler.removeCallbacks(it) }
             pendingResetRunnable = null
+            // 주기 타이커 해제
+            statusTicker?.let { handler.removeCallbacks(it) }
+            statusTicker = null
             
             unregisterReceiver(bluetoothReceiver)
             fusedLocationClient.removeLocationUpdates(locationCallback)

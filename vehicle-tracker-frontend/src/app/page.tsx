@@ -59,11 +59,11 @@ export default function Home() {
     
     // 상태가 있고 유효한 디바이스면 상태 업데이트
     if (status) {
-      // Unknown Device라도 엔진 상태가 OFF면 표시하지 않음
-      if (status.deviceName === 'Unknown Device' && status.engineStatus === 'OFF') {
+      // 엔진 상태가 OFF면 현재 상태에서 숨김 (기기명과 무관)
+      if (status.engineStatus === 'OFF') {
         setCurrentStatus(null);
       } else {
-        // 유효한 디바이스나 엔진 상태가 ON이면 표시
+        // 엔진 상태가 ON일 때만 표시
         setCurrentStatus(status);
       }
     } else {
@@ -457,7 +457,7 @@ export default function Home() {
           <li>• 빅스비 루틴을 통해 블루투스 연결 시 자동으로 데이터 수집이 시작됩니다</li>
           <li>• 차량 이동 중에는 1초마다 GPS 위치가 업데이트됩니다</li>
           <li>• 차량 정지 시 자동으로 데이터 전송이 중단됩니다</li>
-          <li>• 실시간 데이터는 5초마다 자동으로 새로고침됩니다</li>
+          <li>• 실시간 데이터는 3초마다 자동으로 새로고침됩니다</li>
           <li>• 디바이스별로 실시간 통합 표시되어 중복 레이블이 제거됩니다</li>
         </ul>
       </div>
