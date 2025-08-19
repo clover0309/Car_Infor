@@ -18,4 +18,8 @@ interface VehicleStatusRepository : JpaRepository<VehicleStatusEntity, Long> {
     fun findByDeviceIdOrderByTimestampDescIdDesc(deviceId: String): List<VehicleStatusEntity>
     fun findFirstByOrderByTimestampDescIdDesc(): VehicleStatusEntity?
     fun findFirstByDeviceNameOrderByTimestampDescIdDesc(deviceName: String): VehicleStatusEntity?
+
+    // Latest record that contains valid coordinates
+    fun findFirstByDeviceIdAndLatitudeIsNotNullAndLongitudeIsNotNullOrderByTimestampDescIdDesc(deviceId: String): VehicleStatusEntity?
+    fun findFirstByDeviceNameAndLatitudeIsNotNullAndLongitudeIsNotNullOrderByTimestampDescIdDesc(deviceName: String): VehicleStatusEntity?
 }

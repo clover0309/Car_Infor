@@ -133,12 +133,21 @@ class VehicleService(
                 status
             }
             
+            // OFF 상태이며 위/경도가 모두 null인 경우 vehicle_status 저장을 건너뜀 (중복은 허용하되 null 좌표는 저장하지 않음)
+            val isOffWithoutLocation = entityToSave.engineStatus.equals("OFF", ignoreCase = true) &&
+                (entityToSave.latitude == null && entityToSave.longitude == null)
+            if (isOffWithoutLocation) {
+                logger.info("[차량 상태 저장 건너뜀] OFF + 위치 없음: deviceId={}, deviceName={}, timestamp={}", entityToSave.deviceId, entityToSave.deviceName, entityToSave.timestamp)
+                return
+            }
+
             // 차량 상태 저장
             vehicleStatusRepository.save(entityToSave)
             logger.info("차량 상태 저장 성공: 기기 ID: ${entityToSave.deviceId}, 상태: ${entityToSave.engineStatus}, 디바이스 이름: ${entityToSave.deviceName}")
 
-            // 시동이 꺼졌을 때(OFF) 마지막 위치 정보 저장 또는 업데이트
-            if (entityToSave.engineStatus == "OFF") {
+            // 엔진 상태와 무관하게, 유효 좌표가 있을 때 위치 정보 저장/업데이트
+            val hasLatLon = (entityToSave.latitude != null && entityToSave.longitude != null)
+            if (hasLatLon) {
                 saveDeviceLocation(entityToSave, deviceInfo, isAndroidId, status)
             }
         } catch (e: Exception) {
@@ -203,6 +212,14 @@ class VehicleService(
 
     fun getLatestLocation(deviceId: String): DeviceLocationEntity? {
         return deviceLocationRepository.findTopByDeviceIdOrderByTimestampDesc(deviceId)
+    }
+
+    fun getLatestStatusWithLocationByDeviceId(deviceId: String): VehicleStatusEntity? {
+        return vehicleStatusRepository.findFirstByDeviceIdAndLatitudeIsNotNullAndLongitudeIsNotNullOrderByTimestampDescIdDesc(deviceId)
+    }
+
+    fun getLatestStatusWithLocationByDeviceName(deviceName: String): VehicleStatusEntity? {
+        return vehicleStatusRepository.findFirstByDeviceNameAndLatitudeIsNotNullAndLongitudeIsNotNullOrderByTimestampDescIdDesc(deviceName)
     }
 
     fun getAllStatuses(deviceId: String): List<VehicleStatusEntity> {

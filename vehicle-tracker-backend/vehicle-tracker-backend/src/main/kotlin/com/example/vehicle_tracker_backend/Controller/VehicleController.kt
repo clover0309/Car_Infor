@@ -12,7 +12,9 @@ import java.time.LocalDateTime
 import org.slf4j.LoggerFactory
 
 data class LocationDto(
+    @JsonAlias("lat")
     val latitude: Double?,
+    @JsonAlias("lon", "lng")
     val longitude: Double?
 )
 
@@ -30,15 +32,31 @@ data class VehicleStatusResponse(
 class VehicleController(private val vehicleService: VehicleService) {
     private val logger = LoggerFactory.getLogger(VehicleController::class.java)
 
-        private fun VehicleStatusEntity.toResponse(): VehicleStatusResponse {
+    private fun VehicleStatusEntity.toResponse(): VehicleStatusResponse {
         val deviceInfo = vehicleService.getDeviceInfoByDeviceName(this.deviceName)
+        val effectiveDeviceId = deviceInfo?.deviceId ?: this.deviceId
+
+        // 현재 상태에 위치가 없으면 최근 좌표가 있는 상태 → 최근 DeviceLocation 순서로 폴백
+        val locationDto: LocationDto? = if (this.latitude != null && this.longitude != null) {
+            LocationDto(this.latitude, this.longitude)
+        } else {
+            val lastStatusWithLocById = vehicleService.getLatestStatusWithLocationByDeviceId(effectiveDeviceId)
+            val lastStatusWithLoc = lastStatusWithLocById ?: vehicleService.getLatestStatusWithLocationByDeviceName(this.deviceName)
+            if (lastStatusWithLoc != null) {
+                LocationDto(lastStatusWithLoc.latitude, lastStatusWithLoc.longitude)
+            } else {
+                val lastLoc = vehicleService.getLatestLocation(effectiveDeviceId)
+                if (lastLoc != null) LocationDto(lastLoc.latitude, lastLoc.longitude) else null
+            }
+        }
+
         return VehicleStatusResponse(
-            deviceId = deviceInfo?.deviceId ?: this.deviceId, // deviceInfo에서 찾은 실제 deviceId 사용, 없으면 기존 ID 사용
+            deviceId = effectiveDeviceId, // deviceInfo에서 찾은 실제 deviceId 사용, 없으면 기존 ID 사용
             deviceName = this.deviceName,
             engineStatus = this.engineStatus,
             speed = 0, // speed는 현재 엔티티에 없으므로 기본값 0으로 설정
             timestamp = this.timestamp,
-            location = if (this.latitude != null && this.longitude != null) LocationDto(this.latitude, this.longitude) else null
+            location = locationDto
         )
     }
 

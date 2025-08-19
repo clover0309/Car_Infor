@@ -96,6 +96,59 @@ class BluetoothGpsService : Service() {
         }
     }
 
+    /**
+     * 최초 ON 전송 시 lastKnownLocation을 우선 확보하여 위치 포함을 보장
+     */
+    @android.annotation.SuppressLint("MissingPermission")
+    private fun sendFirstOnWithLastKnownLocation() {
+        try {
+            // 연결/시동 상태 확인
+            val isConnected = currentDeviceAddress != null
+            if (!ignitionOn || !isConnected) {
+                sendUpdateToBackend()
+                return
+            }
+
+            // 이미 최근 위치가 있으면 바로 전송
+            if (lastLocation != null) {
+                sendUpdateToBackend()
+                return
+            }
+
+            // 1) lastLocation 시도
+            fusedLocationClient.lastLocation
+                .addOnSuccessListener { loc ->
+                    if (loc != null) {
+                        lastLocation = loc
+                        lastSpeed = loc.speed
+                    }
+                    // lastLocation 결과와 상관없이 우선 전송
+                    sendUpdateToBackend()
+
+                    // 2) 추가로 getCurrentLocation으로 최신 위치를 한 번 더 갱신 시도 후 전송 (옵셔널)
+                    try {
+                        fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+                            .addOnSuccessListener { cur ->
+                                if (cur != null) {
+                                    lastLocation = cur
+                                    lastSpeed = cur.speed
+                                    // 최신 위치로 한 번 더 전송하여 지도 상 즉시 보정
+                                    sendUpdateToBackend()
+                                }
+                            }
+                            .addOnFailureListener { _ -> /* 무시 */ }
+                    } catch (_: Exception) { /* 무시 */ }
+                }
+                .addOnFailureListener {
+                    // 실패 시에도 전송은 진행
+                    sendUpdateToBackend()
+                }
+        } catch (e: Exception) {
+            Log.w(TAG, "sendFirstOnWithLastKnownLocation 중 예외", e)
+            sendUpdateToBackend()
+        }
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.i(TAG, "onStartCommand called, action: ${intent?.action}")
         
@@ -192,8 +245,8 @@ class BluetoothGpsService : Service() {
             // 새 연결 세션 시작: OFF 위치 전송 플래그 초기화
             hasSentOffLocationForCurrentDisconnect = false
             
-            // 즉시 연결 상태 전송
-            sendUpdateToBackend()
+            // 즉시 연결 상태 전송(최초 1회 lastKnownLocation 우선 포함)
+            sendFirstOnWithLastKnownLocation()
             
             // 재연결 시 위치 업데이트 재시작 보장
             try {
