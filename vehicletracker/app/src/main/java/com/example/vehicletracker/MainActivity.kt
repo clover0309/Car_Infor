@@ -8,7 +8,10 @@ import android.webkit.WebViewClient
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceError
+import android.webkit.WebResourceResponse
 import android.webkit.ConsoleMessage
+import android.webkit.WebSettings
+import android.view.View
 import android.widget.TextView
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -117,10 +120,34 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupWebView() {
-        webView.settings.javaScriptEnabled = true
-        webView.settings.domStorageEnabled = true
+    // Chrome DevTools로 WebView 디버깅 허용 (adb로 연결하여 chrome://inspect)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+        WebView.setWebContentsDebuggingEnabled(true)
+    }
+    webView.settings.javaScriptEnabled = true
+    webView.settings.domStorageEnabled = true
+    // Kakao Map 타일 리소스(https)와 페이지(http)의 혼합 콘텐츠 허용
+    webView.settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+    // 지도 타일 렌더링 품질 안정화
+    webView.settings.useWideViewPort = true
+    webView.settings.loadWithOverviewMode = true
+    // 이미지 로드/타일 렌더링 보강
+    webView.settings.setLoadsImagesAutomatically(true)
+    webView.settings.setBlockNetworkImage(false)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        webView.settings.setOffscreenPreRaster(true)
+    }
+    // 하드웨어 가속 강제 사용 (타일 미표시 이슈 방지)
+    webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
 
         webView.webViewClient = object : WebViewClient() {
+            override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
+                val url = request?.url.toString()
+                if (url.contains("daumcdn.net") || url.contains("kakao.com") || url.contains("dapi.kakao.com")) {
+                    Log.d("WebViewReq", "Requesting: $url")
+                }
+                return super.shouldInterceptRequest(view, request)
+            }
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val url = request?.url.toString()
                 // 앱의 기본 URL(WEB_URL)과 같은 도메인인지 확인합니다.
@@ -169,6 +196,19 @@ class MainActivity : AppCompatActivity() {
                 if (request?.isForMainFrame == true) {
                     Log.e("WebViewError", "URL: ${request.url}, Error: ${error?.errorCode}, ${error?.description}")
                     loadFallbackPage()
+                }
+            }
+
+            override fun onReceivedHttpError(
+                view: WebView?,
+                request: WebResourceRequest?,
+                errorResponse: android.webkit.WebResourceResponse?
+            ) {
+                super.onReceivedHttpError(view, request, errorResponse)
+                val url = request?.url.toString()
+                val statusCode = errorResponse?.statusCode
+                if (url.contains("daumcdn.net") || url.contains("kakao.com") || url.contains("dapi.kakao.com")) {
+                    Log.e("WebViewHttpError", "HTTP $statusCode on $url")
                 }
             }
         }

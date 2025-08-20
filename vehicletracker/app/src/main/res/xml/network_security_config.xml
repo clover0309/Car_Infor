@@ -8,5 +8,8 @@
         <domain includeSubdomains="true">dapi.kakao.com</domain>
         <domain includeSubdomains="true">map.daumcdn.net</domain>
         <domain includeSubdomains="true">t1.daumcdn.net</domain>
+        <!-- Add wildcard domains to cover all Kakao/Daum CDN subdomains used by map tiles -->
+        <domain includeSubdomains="true">kakao.com</domain>
+        <domain includeSubdomains="true">daumcdn.net</domain>
     </domain-config>
 </network-security-config>
