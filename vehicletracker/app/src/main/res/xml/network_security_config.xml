@@ -5,5 +5,8 @@
         <domain includeSubdomains="true">localhost</domain>
         <domain includeSubdomains="true">127.0.0.1</domain>
         <domain includeSubdomains="true">192.168.1.219</domain>
+        <domain includeSubdomains="true">dapi.kakao.com</domain>
+        <domain includeSubdomains="true">map.daumcdn.net</domain>
+        <domain includeSubdomains="true">t1.daumcdn.net</domain>
     </domain-config>
 </network-security-config>

@@ -164,6 +164,11 @@ export default function Home() {
             existing.lastLocation = status.location;
           }
         }
+        
+        // 최신 기록에 위치가 없을 수 있으므로, 과거 기록 중 가장 최근 위치를 보완
+        if (!existing.lastLocation && status.location) {
+          existing.lastLocation = status.location;
+        }
       }
     }
     
@@ -398,7 +403,7 @@ export default function Home() {
                   </div>
                 </div>
                 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div className="grid grid-cols-2 md:grid-cols-2 gap-4 text-sm">
                   <div>
                     <p className="text-gray-600">현재 속도</p>
                     <p className="font-mono text-lg">{info.lastSpeed} km/h</p>
@@ -407,22 +412,22 @@ export default function Home() {
                     <p className="text-gray-600">마지막 업데이트</p>
                     <p className="font-mono">{formatTimeOnly(info.lastUpdate)}</p>
                   </div>
-                  <div>
-                    <p className="text-gray-600">총 업데이트 수</p>
-                    <p className="font-mono">{info.totalUpdates}회</p>
-                  </div>
-                  {info.connectionTime && (
-                    <div>
-                      <p className="text-gray-600">연결 지속 시간</p>
-                      <p className="font-mono">{calculateDuration(info.connectionTime, info.lastUpdate)}</p>
-                    </div>
-                  )}
                 </div>
                 
-                {info.lastLocation && (
-                  <div className="mt-3 bg-gray-50 p-2 rounded text-xs font-mono">
-                    📍 위도: {info.lastLocation.latitude.toFixed(6)}, 
-                    경도: {info.lastLocation.longitude.toFixed(6)}
+                {info.lastEngineStatus === 'OFF' && info.lastLocation && (
+                  <div className="mt-3">
+                    <div className="bg-gray-50 p-2 rounded text-xs font-mono">
+                      📍 위도: {info.lastLocation.latitude.toFixed(6)}, 
+                      경도: {info.lastLocation.longitude.toFixed(6)}
+                    </div>
+                    <div className="mt-2">
+                      <KakaoMap 
+                        latitude={info.lastLocation.latitude} 
+                        longitude={info.lastLocation.longitude}
+                        height="240px"
+                        scale={0.5}
+                      />
+                    </div>
                   </div>
                 )}
               </div>

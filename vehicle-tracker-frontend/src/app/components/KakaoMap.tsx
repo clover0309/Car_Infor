@@ -7,6 +7,7 @@ interface KakaoMapProps {
   longitude: number;
   width?: string;
   height?: string;
+  scale?: number; // 1이면 원본, 0.5면 절반 크기
 }
 
 declare global {
@@ -19,9 +20,14 @@ export default function KakaoMap({
   latitude, 
   longitude, 
   width = '100%', 
-  height = '200px' 
+  height = '200px',
+  scale = 1
 }: KakaoMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
+  
+  // scale 값에 따라 실제 렌더링 크기를 계산
+  const scaledWidth = scale === 1 ? width : `calc(${width} * ${scale})`;
+  const scaledHeight = scale === 1 ? height : `calc(${height} * ${scale})`;
 
   useEffect(() => {
     // 카카오 지도 API가 로드되었는지 확인
@@ -69,7 +75,7 @@ export default function KakaoMap({
   return (
     <div 
       ref={mapContainer} 
-      style={{ width, height }}
+      style={{ width: scaledWidth, height: scaledHeight }}
       className="rounded-lg border border-gray-300"
     />
   );
