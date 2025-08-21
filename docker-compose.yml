@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: vehicle-tracker-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword123
+      MYSQL_DATABASE: vehicle_tracker
+      MYSQL_USER: vehicle_user
+      MYSQL_PASSWORD: noinfo
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init-db:/docker-entrypoint-initdb.d
+    networks:
+      - vehicle-tracker-network
+    command: --default-authentication-plugin=mysql_native_password
+
+  # Backend Service
+  backend:
+    build:
+      context: ./vehicle-tracker-backend
+      dockerfile: Dockerfile
+    container_name: vehicle-tracker-backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/vehicle_tracker?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+      - SPRING_DATASOURCE_USERNAME=noinfo
+      - SPRING_DATASOURCE_PASSWORD=noinfo
+    depends_on:
+      - mysql
+    networks:
+      - vehicle-tracker-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # Frontend Service
+  frontend:
+    build:
+      context: ./vehicle-tracker-frontend
+      dockerfile: Dockerfile
+    container_name: vehicle-tracker-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=http://localhost:8080
+    depends_on:
+      - backend
+    networks:
+      - vehicle-tracker-network
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  vehicle-tracker-network:
+    driver: bridge

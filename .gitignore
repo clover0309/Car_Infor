@@ -8,6 +8,7 @@
 /.idea/navEditor.xml
 /.idea/assetWizardSettings.xml
 .DS_Store
+*/.DS_Store
 /build
 /captures
 .externalNativeBuild
@@ -15,4 +16,5 @@
 local.properties
 /.vscode
 /.windsurf
-CLAUDE.md
+/CLAUDE.md
+/scripts/
