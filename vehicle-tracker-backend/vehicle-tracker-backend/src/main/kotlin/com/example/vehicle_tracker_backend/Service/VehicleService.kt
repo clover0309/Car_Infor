@@ -21,8 +21,7 @@ class VehicleService(
     private val logger = LoggerFactory.getLogger(VehicleService::class.java)
     
     /**
-     * ANDROID_ID 패턴인지 확인하는 함수
-     * ANDROID_ID는 일반적으로 16자리 16진수 문자열
+        ANDROID_ID 값을 가져오는 현상으로 인한 Android ID 패턴 확인
      */
     private fun isAndroidIdPattern(deviceId: String): Boolean {
         val androidIdPattern = "[0-9a-f]{16}".toRegex(RegexOption.IGNORE_CASE)
@@ -31,7 +30,7 @@ class VehicleService(
 
     fun getDeviceInfoByDeviceName(deviceName: String): DeviceInfoEntity? {
         return try {
-            // 레포지토리 메서드를 활용하여 최신 등록 정보를 우선 조회
+            // 레포지토리 메서드로 최신 등록 정보를 우선 조회
             val results = deviceInfoRepository.findAllByDeviceNameOrderByIdxDesc(deviceName)
             val found = results.firstOrNull() ?: deviceInfoRepository.findByDeviceName(deviceName)
             if (found == null) {
@@ -54,39 +53,37 @@ class VehicleService(
                 logger.warn("ANDROID_ID 패턴이 감지됨: ${status.deviceId}, 기기 이름: ${status.deviceName}")
             }
             
-            // 1. 먼저 deviceId로 기존 등록된 디바이스 정보 조회 (블루투스 MAC 주소인 경우)
+            // deviceId로 기존 등록된 디바이스 정보 조회 (블루투스 MAC 주소인 경우)
             val deviceInfoByDeviceId = if (!isAndroidId) {
                 deviceInfoRepository.findByDeviceId(status.deviceId)
             } else {
                 null
             }
             
-            // 2. deviceId로 찾지 못한 경우 deviceName으로 조회 시도
+            // deviceId로 찾지 못한 경우 deviceName으로 조회 시도
             val deviceInfo = deviceInfoByDeviceId ?: if (status.deviceName != "Unknown Device") {
                 getDeviceInfoByDeviceName(status.deviceName)
             } else {
                 null
             }
             
-            // 3. 마지막 상태 조회 (deviceId 기준)
+            // 마지막 상태 조회 (deviceId 기준)
             val lastStatus = if (!isAndroidId) {
                 getLatestStatus(status.deviceId)
             } else {
                 null
             }
 
-            // 3-1. 추가 매핑: ANDROID_ID이거나 deviceInfo가 없을 때, deviceName 기준 최신 상태 조회
+            // 추가 매핑: ANDROID_ID이거나 deviceInfo가 없을 때, deviceName 기준 최신 상태 조회
             val lastByName = if (status.deviceName != "Unknown Device") {
                 vehicleStatusRepository.findFirstByDeviceNameOrderByTimestampDescIdDesc(status.deviceName)
             } else null
             
-            // 4. 실제 디바이스 ID를 사용하여 새로운 엔티티 생성
+            // 실제 디바이스 ID를 사용하여 새로운 엔티티 생성
             val entityToSave = if (deviceInfo != null) {
                 // 등록된 디바이스 정보가 있으면 해당 디바이스 ID 사용
                 VehicleStatusEntity(
                     deviceId = deviceInfo.deviceId,
-                    // 중요: DB 외래키 (device_id, device_name) 페어와 정확히 일치시키기 위해
-                    // 등록된 디바이스 이름을 항상 사용합니다.
                     deviceName = deviceInfo.deviceName,
                     engineStatus = status.engineStatus,
                     latitude = status.latitude,
@@ -116,7 +113,7 @@ class VehicleService(
                 )
             } else if (isAndroidId) {
                 // ANDROID_ID 패턴이면서 등록된 디바이스 정보가 없는 경우
-                // 임시 ID 생성 및 로깅
+                // 임시 ID 생성 및 로깅 후 더미로 저장.
                 val tempId = "TEMP_" + UUID.randomUUID().toString().substring(0, 8)
                 logger.info("임시 디바이스 ID 생성: $tempId, 원본 ANDROID_ID: ${status.deviceId}")
                 
@@ -133,7 +130,7 @@ class VehicleService(
                 status
             }
             
-            // OFF 상태이며 위/경도가 모두 null인 경우 vehicle_status 저장을 건너뜀 (중복은 허용하되 null 좌표는 저장하지 않음)
+            // OFF 상태이며 위/경도가 모두 null인 경우 vehicle_status 저장을 건너뛰어줌.
             val isOffWithoutLocation = entityToSave.engineStatus.equals("OFF", ignoreCase = true) &&
                 (entityToSave.latitude == null && entityToSave.longitude == null)
             if (isOffWithoutLocation) {
@@ -151,9 +148,8 @@ class VehicleService(
                 saveDeviceLocation(entityToSave, deviceInfo, isAndroidId, status)
             }
         } catch (e: Exception) {
-            // 전체 트랜잭션 오류 처리
             logger.error("[차량 상태 저장 오류] 기기 ID: ${status.deviceId}, 기기 이름: ${status.deviceName}, 오류: ${e.message}")
-            throw e // 예외를 다시 던져 트랜잭션이 롤백되도록 함
+            throw e
         }
     }
     

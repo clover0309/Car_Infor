@@ -41,7 +41,6 @@ class BluetoothGpsService : Service() {
     private var pendingResetRunnable: Runnable? = null
     // 현재 연결 세션에서 OFF 상태에 마지막 위치를 포함해 전송했는지 여부
     private var hasSentOffLocationForCurrentDisconnect: Boolean = false
-    // 위치 콜백이 없을 때도 주기적으로 상태를 전송하기 위한 타이커
     private var statusTicker: Runnable? = null
 
     companion object {
@@ -71,7 +70,6 @@ class BluetoothGpsService : Service() {
             }
             registerReceiver(bluetoothReceiver, filter)
             
-            // Initialize fusedLocationClient before using it
             fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
             startForegroundServiceNotification()
             startLocationUpdates()
@@ -96,9 +94,9 @@ class BluetoothGpsService : Service() {
         }
     }
 
-    /**
-     * 최초 ON 전송 시 lastKnownLocation을 우선 확보하여 위치 포함을 보장
-     */
+
+     //최초 ON 전송 시 lastKnownLocation을 우선 확보하여 위치 포함을 보장
+
     @android.annotation.SuppressLint("MissingPermission")
     private fun sendFirstOnWithLastKnownLocation() {
         try {
@@ -115,7 +113,7 @@ class BluetoothGpsService : Service() {
                 return
             }
 
-            // 1) lastLocation 시도
+            // lastLocation 시도
             fusedLocationClient.lastLocation
                 .addOnSuccessListener { loc ->
                     if (loc != null) {
@@ -125,7 +123,7 @@ class BluetoothGpsService : Service() {
                     // lastLocation 결과와 상관없이 우선 전송
                     sendUpdateToBackend()
 
-                    // 2) 추가로 getCurrentLocation으로 최신 위치를 한 번 더 갱신 시도 후 전송 (옵셔널)
+                    // 추가로 getCurrentLocation으로 최신 위치를 한 번 더 갱신 시도 후 전송
                     try {
                         fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
                             .addOnSuccessListener { cur ->
@@ -136,7 +134,7 @@ class BluetoothGpsService : Service() {
                                     sendUpdateToBackend()
                                 }
                             }
-                            .addOnFailureListener { _ -> /* 무시 */ }
+                            .addOnFailureListener { _ -> /* 무시 */}
                     } catch (_: Exception) { /* 무시 */ }
                 }
                 .addOnFailureListener {
@@ -174,17 +172,16 @@ class BluetoothGpsService : Service() {
                 Log.i(TAG, "[시동 OFF 감지] 서비스 종료로 인한 엔진 OFF 상태 전송, 기기: ${currentDeviceName ?: "Unknown"}")
                 ignitionOn = false
                 
-                // 중요: 현재 디바이스 ID 기록 (로그용)
+                // 로그용
                 val currentId = deviceId
                 Log.i(TAG, "서비스 종료 - 디바이스 ID($currentId)로 OFF 상태 전송")
                 
-                // 서비스 종료 시 확실하게 OFF 상태 전송 (마지막 위치 포함)
+                // 서비스 종료 시 OFF 상태 전송
                 sendUpdateToBackend(currentId, includeLastLocationOnOff = true)
                 
                 // 약간의 지연 후 한 번 더 OFF 상태 전송 (네트워크 문제로 첫 번째 요청이 실패할 경우를 대비)
                 try {
-                    // 서비스 종료 중이므로 별도 스레드 없이 바로 실행
-                    Thread.sleep(500) // 0.5초 지연 (서비스 종료 중이므로 짧게 설정)
+                    Thread.sleep(500) // 0.5초 지연
                     sendUpdateToBackend(currentId) // 한 번 더 OFF 상태 전송(위치 미포함)
                     Log.i(TAG, "서비스 종료 - 추가 OFF 상태 전송 완료")
                     
@@ -245,7 +242,7 @@ class BluetoothGpsService : Service() {
             // 새 연결 세션 시작: OFF 위치 전송 플래그 초기화
             hasSentOffLocationForCurrentDisconnect = false
             
-            // 즉시 연결 상태 전송(최초 1회 lastKnownLocation 우선 포함)
+            // 즉시 연결 상태 전송
             sendFirstOnWithLastKnownLocation()
             
             // 재연결 시 위치 업데이트 재시작 보장
@@ -272,8 +269,8 @@ class BluetoothGpsService : Service() {
         
         Log.i(TAG, "차량 블루투스 연결 해제: $deviceName ($deviceAddress)")
         
-        // 중요: 연결 해제 시에도 블루투스 디바이스 ID를 유지하여 OFF 상태 전송
-        // 디바이스 ID를 변경하기 전에 현재 디바이스 ID로 OFF 상태 전송
+        /*연결 해제 시에도 블루투스 디바이스 ID를 유지하여 OFF 상태 전송
+        디바이스 ID를 변경하기 전에 현재 디바이스 ID로 OFF 상태 전송 */
         val originalDeviceId = deviceId
         ignitionOn = false
         
@@ -399,13 +396,11 @@ class BluetoothGpsService : Service() {
         }
         handler.postDelayed(pendingResetRunnable!!, 3000)
         
-        // 현재 추적 중인 기기 정보 부분 초기화 (디바이스 이름은 유지)
+        // 현재 추적 중인 기기 정보 부분 초기화
         currentDevice = null
         currentDeviceAddress = null
         
-        // 중요: currentDeviceName은 초기화하지 않고 유지
-        // 이렇게 하면 블루투스가 꺼진 후에도 마지막으로 연결된 디바이스 이름을 계속 사용
-        
+        // 디버깅용 로그
         Log.i(TAG, "블루투스 꺼짐으로 인한 차량 추적 중지 (디바이스 이름 유지: $currentDeviceName)")
 
         // 블루투스 어댑터 꺼짐 시 위치 업데이트 중단
@@ -455,8 +450,7 @@ class BluetoothGpsService : Service() {
                 lastLocation = location
                 lastSpeed = location?.speed ?: 0f
                 
-                // 차량이 실제로 연결되어 있고(주소 존재) 시동이 켜진 상태일 때만 전송
-                // currentDeviceName 은 OFF 전송을 위해 유지되므로 주소를 기준으로 연결 여부를 판단
+                // 차량이 실제로 연결되어 있고 시동이 켜진 상태일 때만 전송
                 if (ignitionOn && currentDeviceAddress != null) {
                     sendUpdateToBackend()
                 }
@@ -479,7 +473,7 @@ class BluetoothGpsService : Service() {
 
     @android.annotation.SuppressLint("MissingPermission")
     private fun sendUpdateToBackend(overrideDeviceId: String? = null, includeLastLocationOnOff: Boolean = false) {
-        // 실제 연결 여부(주소 존재)를 기반으로 엔진상태를 계산하여, 연결이 없으면 어떤 경우에도 ON을 보내지 않도록 보장
+        // 실제 연결 여부를 기반으로 블루투스 연결 상태를 계산하여, 연결이 없으면 어떤 경우에도 ON을 보내지 않도록 보장
         val isConnected = currentDeviceAddress != null
         val engineStatus = if (ignitionOn && isConnected) "ON" else "OFF"
         val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
@@ -488,7 +482,7 @@ class BluetoothGpsService : Service() {
         // 저장된 디바이스 이름이 있으면 사용, 없으면 Unknown Device
         val btName = currentDeviceName ?: "Unknown Device"
         
-        // OFF에서 마지막 위치를 포함할지 여부(세션별 1회로 제한)
+        // OFF에서 마지막 위치를 포함할지 여부(세션별 1회만)
         val willIncludeOffLocation = engineStatus == "OFF" && includeLastLocationOnOff && !hasSentOffLocationForCurrentDisconnect && lastLocation != null
         if (willIncludeOffLocation) {
             hasSentOffLocationForCurrentDisconnect = true
@@ -507,7 +501,7 @@ class BluetoothGpsService : Service() {
                     longitude = lastLocation?.longitude
                 )
             } else {
-                null // OFF 상태일 때는 기본적으로 위치 정보 없음 (첫 전송에 한해 포함 가능)
+                null
             }
         )
         

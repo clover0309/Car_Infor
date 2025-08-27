@@ -11,7 +11,6 @@ import com.example.vehicletracker.api.DeviceRegisterRequest
 import com.example.vehicletracker.api.DeviceInfoEntity
 import com.example.vehicletracker.api.VehicleStatusDto
 
-// Retrofit 인터페이스
 
 interface VehicleTrackerApi {
     @POST("/api/vehicle/status")

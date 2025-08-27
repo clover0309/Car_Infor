@@ -18,11 +18,13 @@ class DeviceInfoService(
     @Transactional
     fun registerDevice(deviceId: String, deviceName: String): Pair<DeviceInfoEntity, Boolean> {
         val existingDevice = findByDeviceId(deviceId)
+        // 기존 기기인 경우, isNew = false
         if (existingDevice != null) {
-            return Pair(existingDevice, false) // 기존 기기, isNew = false
+            return Pair(existingDevice, false) 
         }
+        // 새 기기인 경우, isNew = true.
         val newDevice = deviceInfoRepository.save(DeviceInfoEntity(deviceId = deviceId, deviceName = deviceName))
-        return Pair(newDevice, true) // 새 기기, isNew = true
+        return Pair(newDevice, true) 
     }
 
     @Transactional

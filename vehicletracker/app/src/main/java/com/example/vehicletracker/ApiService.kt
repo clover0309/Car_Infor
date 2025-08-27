@@ -11,7 +11,7 @@ import java.net.URL
 class ApiService {
     companion object {
         private const val TAG = "ApiService"
-        // 백엔드 서버 주소 (Spring Boot)
+        // 백엔드 서버 주소
         private const val BASE_URL = "http://192.168.1.219:8080/api/vehicle"
     }
 
@@ -47,7 +47,8 @@ class ApiService {
     suspend fun getLatestVehicleStatus(): String? {
         return withContext(Dispatchers.IO) {
             try {
-                val url = URL("$BASE_URL/current") // 최신 상태를 가져오는 엔드포인트
+                // 최신 상태 조회 엔드포인트
+                val url = URL("$BASE_URL/current")
                 val connection = url.openConnection() as HttpURLConnection
                 connection.requestMethod = "GET"
                 connection.connect()
@@ -56,7 +57,7 @@ class ApiService {
                     // 성공적으로 데이터를 받아왔을 때
                     connection.inputStream.bufferedReader().use { it.readText() }
                 } else {
-                    // 실패했을 때
+                    // 실패했을 때 null 반환
                     null
                 }
             } catch (e: Exception) {

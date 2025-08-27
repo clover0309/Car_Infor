@@ -22,7 +22,7 @@ data class VehicleStatusResponse(
     val deviceId: String,
     val deviceName: String,
     val engineStatus: String,
-    val speed: Int, // speed 필드 추가
+    val speed: Int,
     val timestamp: LocalDateTime,
     val location: LocationDto?
 )
@@ -36,7 +36,6 @@ class VehicleController(private val vehicleService: VehicleService) {
         val deviceInfo = vehicleService.getDeviceInfoByDeviceName(this.deviceName)
         val effectiveDeviceId = deviceInfo?.deviceId ?: this.deviceId
 
-        // 현재 상태에 위치가 없으면 최근 좌표가 있는 상태 → 최근 DeviceLocation 순서로 폴백
         val locationDto: LocationDto? = if (this.latitude != null && this.longitude != null) {
             LocationDto(this.latitude, this.longitude)
         } else {
@@ -51,10 +50,10 @@ class VehicleController(private val vehicleService: VehicleService) {
         }
 
         return VehicleStatusResponse(
-            deviceId = effectiveDeviceId, // deviceInfo에서 찾은 실제 deviceId 사용, 없으면 기존 ID 사용
+            deviceId = effectiveDeviceId,
             deviceName = this.deviceName,
             engineStatus = this.engineStatus,
-            speed = 0, // speed는 현재 엔티티에 없으므로 기본값 0으로 설정
+            speed = 0, 
             timestamp = this.timestamp,
             location = locationDto
         )
@@ -63,7 +62,7 @@ class VehicleController(private val vehicleService: VehicleService) {
     data class VehicleStatusDto(
         val deviceId: String,
         @JsonProperty("deviceName")
-        @JsonAlias("bluetoothDevice") // 안드로이드 앱 호환성을 위해 bluetoothDevice도 deviceName으로 매핑
+        @JsonAlias("bluetoothDevice")
         val deviceName: String,
         val engineStatus: String,
         val speed: Double,
@@ -82,7 +81,7 @@ class VehicleController(private val vehicleService: VehicleService) {
             statusDto.timestamp,
             statusDto.location != null
         )
-        // 위치 상세 로그 및 유효성 경고
+        
         statusDto.location?.let {
             logger.info("[수신 위치] lat={}, lon={}", it.latitude, it.longitude)
             val lat = it.latitude

@@ -24,13 +24,13 @@ class JacksonConfig {
     fun objectMapper(): ObjectMapper {
         val mapper = ObjectMapper()
         
-        // Kotlin 지원 모듈 등록 (data class 역직렬화를 위해 필수)
+        // Kotlin 모듈 등록
         mapper.registerModule(KotlinModule.Builder().build())
         
         // JavaTime 모듈 등록
         val javaTimeModule = JavaTimeModule()
         
-        // LocalDateTime 커스텀 직렬화/역직렬화기 등록 (KST 타임존 적용)
+        // LocalDateTime 커스텀 직렬화/역직렬화 등록 (KST 타임존 적용)
         val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
         javaTimeModule.addSerializer(LocalDateTime::class.java, LocalDateTimeSerializer(formatter))
         javaTimeModule.addDeserializer(LocalDateTime::class.java, object : com.fasterxml.jackson.databind.JsonDeserializer<LocalDateTime>() {

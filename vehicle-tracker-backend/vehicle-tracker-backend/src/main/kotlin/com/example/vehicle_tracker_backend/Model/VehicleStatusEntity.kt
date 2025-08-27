@@ -38,6 +38,5 @@ data class VehicleStatusEntity(
     )
     val deviceInfo: DeviceInfoEntity? = null
 ) {
-    // DeviceInfo 관계를 통해 디바이스 이름 가져오기
     fun getDeviceNameFromRelation(): String = deviceInfo?.deviceName ?: deviceName
 }

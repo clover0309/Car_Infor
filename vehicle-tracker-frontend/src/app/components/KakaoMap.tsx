@@ -7,7 +7,7 @@ interface KakaoMapProps {
   longitude: number;
   width?: string;
   height?: string;
-  scale?: number; // 1이면 원본, 0.5면 절반 크기
+  scale?: number;
 }
 
 declare global {
@@ -26,7 +26,7 @@ export default function KakaoMap({
   const mapContainer = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   
-  // scale 값에 따라 실제 렌더링 크기를 계산
+  // scale 계산.
   const scaledWidth = scale === 1 ? width : `calc(${width} * ${scale})`;
   const scaledHeight = scale === 1 ? height : `calc(${height} * ${scale})`;
 
@@ -41,7 +41,7 @@ export default function KakaoMap({
       // 지도 옵션 설정
       const options = {
         center: new window.kakao.maps.LatLng(latitude, longitude),
-        level: 3 // 지도 확대 레벨 (1~14)
+        level: 3 
       };
 
       // 지도 생성
@@ -57,7 +57,7 @@ export default function KakaoMap({
       // 마커를 지도에 표시
       marker.setMap(map);
 
-      // 인포윈도우 생성 (위치 정보 표시)
+      // 인포윈도우 생성
       const infowindow = new window.kakao.maps.InfoWindow({
         content: `
           <div style="padding:5px; font-size:12px; width:200px;">
@@ -93,7 +93,7 @@ export default function KakaoMap({
 
   }, [latitude, longitude]);
 
-  // 윈도우 리사이즈 시 타일 재배치 (WebView 회전/레이아웃 변경 대응)
+  // 윈도우 리사이즈 시 타일 재배치
   useEffect(() => {
     const handleResize = () => {
       if (window.kakao && mapRef.current) {

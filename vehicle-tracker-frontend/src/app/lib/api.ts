@@ -16,11 +16,11 @@ const GetAPIBaseURL = () => {
         console.log('🔍 WebView 포함 여부:', userAgent.includes('WebView'));
         console.log('🔍 wv 포함 여부:', userAgent.includes('wv'));
         
-        // 안드로이드 WebView 감지 (더 정확한 조건)
+        // 안드로이드 WebView 감지
         const isAndroidWebView = userAgent.includes('Android') && 
                                 (userAgent.includes('WebView') || userAgent.includes('wv'));
         
-        // 또는 단순히 Android만 체크
+        // Android만 체크
         const isAndroid = userAgent.includes('Android');
         
         console.log('🔍 Android WebView 감지:', isAndroidWebView);
@@ -63,7 +63,6 @@ export const vehicleApi = {
         try {
             const response = await fetch(`${API_BASE_URL}/current`, { cache: 'no-store' });
             if (response.status === 204) {
-                // No Content: 현재 상태 없음
                 return null;
             }
             if (!response.ok) {
@@ -71,7 +70,7 @@ export const vehicleApi = {
             }
 
             const data = await response.json();
-            // 백엔드가 VehicleStatus를 직접 반환하므로 바로 data를 반환
+            // 백엔드가 VehicleStatus를 data로 반환
             return data;
         } catch (error) {
             console.error('Error fetching current status:', error);

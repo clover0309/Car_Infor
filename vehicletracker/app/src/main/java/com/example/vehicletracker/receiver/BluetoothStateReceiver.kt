@@ -23,7 +23,7 @@ class BluetoothStateReceiver : BroadcastReceiver() {
         private const val KEY_LAST_CONNECTED_DEVICE_ADDRESS = "last_connected_device_address"
         private const val KEY_LAST_LAUNCH_TIME = "last_launch_time"
         
-        // 인텐트 중복 방지를 위한 최소 시간 간격 (밀리초)
+        // 인텐트 중복 방지를 위한 최소 시간 간격 (ms 단위)
         private const val MIN_LAUNCH_INTERVAL = 5000 // 5초
     }
 
@@ -44,9 +44,7 @@ class BluetoothStateReceiver : BroadcastReceiver() {
         }
     }
 
-    /**
-     * 블루투스 기기 연결 처리
-     */
+    // 블루투스 기기 연결 처리
     @android.annotation.SuppressLint("MissingPermission")
     private fun handleBluetoothConnected(context: Context, intent: Intent) {
         val device: BluetoothDevice? = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
@@ -273,10 +271,10 @@ class BluetoothStateReceiver : BroadcastReceiver() {
 
         val lowerDeviceName = deviceName.lowercase()
 
-        // 테스트 모드: 모든 블루투스 기기를 차량으로 인식 (개발/테스트용)
-        val isTestMode = true // 실제 배포시에는 false로 변경
+        // 테스트 모드로 사용하려 하였으나, 블루투스 기기이름이 제각각이라 전부 허용.
+        val isTestMode = true
         if (isTestMode) {
-            Log.d(TAG, "테스트 모드: 모든 블루투스 기기를 차량으로 인식")
+            Log.d(TAG, "모든 블루투스 기기를 차량으로 인식")
             return true
         }
 
@@ -288,9 +286,9 @@ class BluetoothStateReceiver : BroadcastReceiver() {
             }
         }
 
-        // MAC 주소 기반 차량 제조사 검사 (일부 예시)
+        // 차량 제조사 MAC 주소 검사
         val vehicleManufacturerPrefixes = listOf(
-            "00:16:A4", // Samsung (차량용 시스템)
+            "00:16:A4", // Android Auto
             "AC:5F:3E", // Apple CarPlay
             "00:1B:DC", // 현대/기아
         )
@@ -305,23 +303,18 @@ class BluetoothStateReceiver : BroadcastReceiver() {
         return false
     }
 
-    /**
-     * 차량 트래커 앱 자동 실행
-     */
+    // 차량 트래커 앱 자동 실행 (미사용 더미)
     private fun launchVehicleTrackerApp(context: Context, deviceName: String, deviceAddress: String) {
         try {
-            // 마지막 앱 실행 시간 확인
             val sharedPrefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             val lastLaunchTime = sharedPrefs.getLong(KEY_LAST_LAUNCH_TIME, 0)
             val currentTime = System.currentTimeMillis()
             
-            // 마지막 실행 후 최소 시간 간격이 지나지 않았으면 중복 실행 방지
             if (currentTime - lastLaunchTime < MIN_LAUNCH_INTERVAL) {
                 Log.i(TAG, "앱 실행 요청이 너무 빈번함: ${(currentTime - lastLaunchTime)}ms 간격, 최소 ${MIN_LAUNCH_INTERVAL}ms 필요")
                 return
             }
             
-            // 현재 시간을 마지막 실행 시간으로 저장
             sharedPrefs.edit().putLong(KEY_LAST_LAUNCH_TIME, currentTime).apply()
             
             val launchIntent = Intent(context, MainActivity::class.java).apply {

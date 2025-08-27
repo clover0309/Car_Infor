@@ -1,10 +1,8 @@
--- Vehicle Tracker Database Initialization Script
-
--- Create database if not exists
+-- 초기에 스키마가 존재하지 않으면 생성 및 지정.
 CREATE DATABASE IF NOT EXISTS vehicle_tracker;
 USE vehicle_tracker;
 
--- Create device_info table
+-- device_info 테이블 생성
 CREATE TABLE IF NOT EXISTS device_info (
     idx BIGINT AUTO_INCREMENT PRIMARY KEY,
     device_id VARCHAR(255) NOT NULL UNIQUE,
@@ -13,7 +11,7 @@ CREATE TABLE IF NOT EXISTS device_info (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
--- Create device_location table
+-- device_location 테이블 생성
 CREATE TABLE IF NOT EXISTS device_location (
     idx BIGINT AUTO_INCREMENT PRIMARY KEY,
     device_id VARCHAR(255) NOT NULL,
@@ -24,7 +22,7 @@ CREATE TABLE IF NOT EXISTS device_location (
     INDEX idx_timestamp (timestamp)
 );
 
--- Create vehicle_status table
+-- vehicle_status 테이블 생성
 CREATE TABLE IF NOT EXISTS vehicle_status (
     idx BIGINT AUTO_INCREMENT PRIMARY KEY,
     device_id VARCHAR(255) NOT NULL,
@@ -37,9 +35,5 @@ CREATE TABLE IF NOT EXISTS vehicle_status (
     INDEX idx_engine_status (engine_status)
 );
 
--- Insert sample data (optional)
--- INSERT INTO device_info (device_id, device_name) VALUES 
--- ('sample_device_001', 'Sample Device 1'),
--- ('sample_device_002', 'Sample Device 2');
 
 COMMIT;

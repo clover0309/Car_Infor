@@ -26,7 +26,7 @@ export default function Home() {
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // 안전한 로컬 타임스탬프 파서 ("yyyy-MM-dd HH:mm:ss" 지원)
+  // 로컬 타임스탬프 파싱 (KST 기준)
   const parseLocalTimestamp = (timestamp: string): number => {
     try {
       // 이미 "YYYY-MM-DD HH:mm:ss" 형식이면 수동 파싱
@@ -54,12 +54,12 @@ export default function Home() {
   // 현재 상태 조회
   const fetchCurrentStatus = async () => {
     const status = await vehicleApi.getCurrentStatus();
-    console.log('Received status:', status); // 디버깅용
+    console.log('Received status:', status); // 디버깅용 - 전체 상태 확인
     console.log('Timestamp format:', status?.timestamp); // timestamp 형식 확인
     
     // 상태가 있고 유효한 디바이스면 상태 업데이트
     if (status) {
-      // 엔진 상태가 OFF면 현재 상태에서 숨김 (기기명과 무관)
+      // 엔진 상태가 OFF면 현재 상태에서 숨김
       if (status.engineStatus === 'OFF') {
         setCurrentStatus(null);
       } else {
@@ -145,8 +145,7 @@ export default function Home() {
         const existing = newDeviceTracking.get(deviceKey)!;
         existing.totalUpdates++;
         
-        // 중요: 최신 상태 정보 업데이트
-        // 동시간대(equal timestamp)에서는 OFF가 ON을 덮어쓰도록 보정
+        // 최신 상태 정보 업데이트
         const statusTs = parseLocalTimestamp(status.timestamp);
         const existingTs = parseLocalTimestamp(existing.lastUpdate);
         const shouldUpdate =
@@ -165,7 +164,7 @@ export default function Home() {
           }
         }
         
-        // 최신 기록에 위치가 없을 수 있으므로, 과거 기록 중 가장 최근 위치를 보완
+        // 최신 기록에 위치가 없을 수 있으므로, 과거 기록 중 가장 최근 위치로 보완
         if (!existing.lastLocation && status.location) {
           existing.lastLocation = status.location;
         }
@@ -235,7 +234,7 @@ export default function Home() {
     }
   };
 
-  // 시간만 추출하는 함수
+  // 시간만 추출해주는 함수.
   const formatTimeOnly = (timestamp: string) => {
     const timePart = timestamp.split(' ')[1];
     return timePart || timestamp;
@@ -244,7 +243,7 @@ export default function Home() {
   // 연결 지속 시간 계산
   const calculateDuration = (connectionTime: string, lastUpdate: string) => {
     try {
-        // "yyyy-MM-dd HH:mm:ss" 형식 파싱
+
         const parseLocalTime = (timeStr: string) => {
             const [datePart, timePart] = timeStr.split(' ');
             const [year, month, day] = datePart.split('-').map(Number);
@@ -281,7 +280,6 @@ export default function Home() {
     <main className="container mx-auto p-4 space-y-6">
       <h1 className="text-3xl font-bold text-center">차량 실시간 모니터링 시스템</h1>
       
-      {/* 연결 상태 */}
       <div className="bg-gray-100 p-4 rounded-lg">
         <h2 className="text-xl font-semibold mb-2">시스템 상태</h2>
         <div className="flex items-center space-x-4">
@@ -302,7 +300,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* 현재 차량 상태 */}
       <div className="bg-white border border-gray-200 p-4 rounded-lg shadow-sm">
         <h2 className="text-xl font-semibold mb-4 flex items-center">
           🚗 현재 차량 상태
@@ -335,7 +332,6 @@ export default function Home() {
               </p>
             </div>
             
-            {/* 위치 정보 */}
             <div className="space-y-2">
               {currentStatus.location ? (
                 <>
@@ -345,12 +341,13 @@ export default function Home() {
                     <p>경도: {currentStatus.location.longitude.toFixed(6)}</p>
                   </div>
                   <div className="mt-2">
-                    {/* 카카오 지도 표시 */}
+
                     <KakaoMap 
                       latitude={currentStatus.location.latitude} 
                       longitude={currentStatus.location.longitude}
                       height="200px"
                     />
+
                   </div>
                 </>
               ) : (
@@ -375,7 +372,6 @@ export default function Home() {
         </button>
       </div>
 
-      {/* 디바이스별 실시간 추적 현황 */}
       <div className="bg-white border border-gray-200 p-4 rounded-lg shadow-sm">
         <h2 className="text-xl font-semibold mb-4">🚗 디바이스별 실시간 추적 현황</h2>
         {deviceTracking.size > 0 ? (
@@ -455,7 +451,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* 시스템 정보 */}
       <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
         <h3 className="text-lg font-medium text-blue-800 mb-2">💡 사용 방법</h3>
         <ul className="text-sm text-blue-700 space-y-1">

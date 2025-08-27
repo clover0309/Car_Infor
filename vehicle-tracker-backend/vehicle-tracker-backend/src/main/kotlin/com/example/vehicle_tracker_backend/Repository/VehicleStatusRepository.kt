@@ -12,14 +12,12 @@ interface VehicleStatusRepository : JpaRepository<VehicleStatusEntity, Long> {
     fun findFirstByOrderByTimestampDesc(): VehicleStatusEntity?
     fun findFirstByDeviceNameOrderByTimestampDesc(deviceName: String): VehicleStatusEntity?
 
-    // Deterministic ordering with tie-breaker on id when timestamps are equal
     fun findAllByOrderByTimestampDescIdDesc(): List<VehicleStatusEntity>
     fun findFirstByDeviceIdOrderByTimestampDescIdDesc(deviceId: String): VehicleStatusEntity?
     fun findByDeviceIdOrderByTimestampDescIdDesc(deviceId: String): List<VehicleStatusEntity>
     fun findFirstByOrderByTimestampDescIdDesc(): VehicleStatusEntity?
     fun findFirstByDeviceNameOrderByTimestampDescIdDesc(deviceName: String): VehicleStatusEntity?
 
-    // Latest record that contains valid coordinates
     fun findFirstByDeviceIdAndLatitudeIsNotNullAndLongitudeIsNotNullOrderByTimestampDescIdDesc(deviceId: String): VehicleStatusEntity?
     fun findFirstByDeviceNameAndLatitudeIsNotNullAndLongitudeIsNotNullOrderByTimestampDescIdDesc(deviceName: String): VehicleStatusEntity?
 }
